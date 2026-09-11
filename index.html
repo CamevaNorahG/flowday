@@ -8,6 +8,9 @@
   <meta name="theme-color" content="#6366F1" />
   <link rel="manifest" href="manifest.json" />
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -90,13 +93,26 @@
           </button>
         </nav>
         <div class="px-4 py-4 border-t border-slate-100">
-          <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4">
+          <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 mb-3">
             <div class="flex items-center gap-2 mb-2">
               <span class="streak-flame text-lg">&#128293;</span>
               <span class="text-sm font-semibold text-slate-700">连续 {{ streakDays }} 天</span>
             </div>
             <p class="text-xs text-slate-500">坚持记录每一天</p>
           </div>
+          <div v-if="currentUser">
+            <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl mb-2">
+              <div class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold">{{ currentUser.email[0].toUpperCase() }}</div>
+              <span class="text-xs text-slate-600 truncate flex-1">{{ currentUser.email }}</span>
+            </div>
+            <div class="flex gap-1.5">
+              <button @click="syncNow" class="flex-1 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-medium hover:bg-indigo-100 transition">同步</button>
+              <button @click="logout" class="flex-1 py-2 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium hover:bg-slate-200 transition">退出</button>
+            </div>
+          </div>
+          <button v-else @click="showAuthModal = true" class="w-full py-2.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl text-sm font-medium hover:opacity-90 transition">
+            登录 / 注册
+          </button>
         </div>
       </aside>
 
@@ -108,6 +124,12 @@
             <span class="font-bold text-slate-800">FlowDay</span>
           </div>
           <div class="flex items-center gap-2">
+            <button v-if="!currentUser" @click="showAuthModal = true" class="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-medium">登录</button>
+            <div v-else class="flex items-center gap-1.5">
+              <span v-if="syncStatus === '同步中...'" class="text-xs text-indigo-400">&#8635;</span>
+              <span v-else-if="syncStatus === '已同步'" class="text-xs text-emerald-400">&#10003;</span>
+              <div class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-[10px] font-bold" @click="currentView = 'settings'">{{ currentUser.email[0].toUpperCase() }}</div>
+            </div>
             <span class="streak-flame text-sm">&#128293;</span>
             <span class="text-xs font-semibold text-slate-600">{{ streakDays }}天</span>
           </div>
@@ -572,6 +594,43 @@
           </div>
         </div>
       </div>
+      <!-- Auth Modal -->
+      <div v-if="showAuthModal" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="modal-overlay absolute inset-0" @click="showAuthModal = false"></div>
+        <div class="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl mx-4" style="max-height:90vh;overflow-y:auto">
+          <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-slate-800">{{ authMode === 'login' ? '登录' : '注册' }}</h3>
+            <button @click="showAuthModal = false" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 transition text-slate-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div v-if="authError" class="px-4 py-3 bg-red-50 text-red-600 rounded-xl text-sm">{{ authError }}</div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">邮箱</label>
+              <input v-model="authEmail" type="email" placeholder="your@email.com" class="w-full px-4 py-3 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" />
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">密码</label>
+              <input v-model="authPassword" type="password" placeholder="至少6位" class="w-full px-4 py-3 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" @keyup.enter="submitAuth" />
+            </div>
+            <button @click="submitAuth" :disabled="authLoading" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl text-sm font-medium hover:opacity-90 transition shadow-lg shadow-indigo-200 disabled:opacity-50">
+              {{ authLoading ? '请稍候...' : (authMode === 'login' ? '登录' : '注册') }}
+            </button>
+            <div class="text-center">
+              <button @click="authMode = authMode === 'login' ? 'signup' : 'login'" class="text-sm text-indigo-500 hover:text-indigo-600">
+                {{ authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sync Status Toast -->
+      <div v-if="syncStatus" class="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full text-xs font-medium shadow-lg transition-all"
+        :class="syncStatus === '已同步' ? 'bg-emerald-50 text-emerald-600' : syncStatus === '同步中...' ? 'bg-indigo-50 text-indigo-600' : 'bg-red-50 text-red-600'">
+        {{ syncStatus }}
+      </div>
     </div>
   </script>
 
@@ -582,6 +641,18 @@
     var computed = Vue.computed;
     var watch = Vue.watch;
     var onMounted = Vue.onMounted;
+
+    firebase.initializeApp({
+      apiKey: "AIzaSyDkUukBVG89kDwhDN-gX5umaRb5WJ8ZGmc",
+      authDomain: "flowday-ad928.firebaseapp.com",
+      projectId: "flowday-ad928",
+      storageBucket: "flowday-ad928.firebasestorage.app",
+      messagingSenderId: "750315066317",
+      appId: "1:750315066317:web:25f1507dd40c6fca13ea84",
+      measurementId: "G-FMGGGER5SC"
+    });
+    var auth = firebase.auth();
+    var db = firebase.firestore();
 
     var app = createApp({
       template: '#tpl-app',
@@ -656,6 +727,17 @@
         var dailyNoteInput = ref('');
         var noteSaved = ref(false);
 
+        var currentUser = ref(null);
+        var showAuthModal = ref(false);
+        var authMode = ref('login');
+        var authEmail = ref('');
+        var authPassword = ref('');
+        var authError = ref('');
+        var authLoading = ref(false);
+        var syncStatus = ref('');
+        var isSyncing = ref(false);
+        var syncTimer = null;
+
         var taskForm = reactive({
           title: '', description: '', category: 'study', subcategory: '',
           period: 'short', deadline: '', tags: [], status: 'active', addToToday: false,
@@ -682,13 +764,13 @@
           } catch (e) { console.error('Load error:', e); }
         }
 
-        function saveTasks() { localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks.value)); }
-        function saveRecords() { localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(dailyRecords.value)); }
-        function saveCategories() { localStorage.setItem(STORAGE_KEYS.categories, JSON.stringify(categories.value)); }
-        function saveSubcats() { localStorage.setItem(STORAGE_KEYS.subcats, JSON.stringify(subcategories.value)); }
-        function saveNotes() { localStorage.setItem(STORAGE_KEYS.notes, JSON.stringify(Object.assign({}, dailyNotes))); }
-        function saveRecurringState() { localStorage.setItem(STORAGE_KEYS.recurringState, JSON.stringify(Object.assign({}, recurringState))); }
-        function saveDismissed() { localStorage.setItem(STORAGE_KEYS.dismissed, JSON.stringify(Object.assign({}, dismissedRecurring))); }
+        function saveTasks() { localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks.value)); scheduleSync(); }
+        function saveRecords() { localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(dailyRecords.value)); scheduleSync(); }
+        function saveCategories() { localStorage.setItem(STORAGE_KEYS.categories, JSON.stringify(categories.value)); scheduleSync(); }
+        function saveSubcats() { localStorage.setItem(STORAGE_KEYS.subcats, JSON.stringify(subcategories.value)); scheduleSync(); }
+        function saveNotes() { localStorage.setItem(STORAGE_KEYS.notes, JSON.stringify(Object.assign({}, dailyNotes))); scheduleSync(); }
+        function saveRecurringState() { localStorage.setItem(STORAGE_KEYS.recurringState, JSON.stringify(Object.assign({}, recurringState))); scheduleSync(); }
+        function saveDismissed() { localStorage.setItem(STORAGE_KEYS.dismissed, JSON.stringify(Object.assign({}, dismissedRecurring))); scheduleSync(); }
 
         function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
         function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
@@ -1275,6 +1357,119 @@
           Object.keys(dismissedRecurring).forEach(function(k) { delete dismissedRecurring[k]; });
           saveTasks(); saveRecords(); saveNotes(); saveRecurringState(); saveDismissed();
           dailyNoteInput.value = '';
+          if (currentUser.value) cloudSave();
+        }
+
+        function submitAuth() {
+          authError.value = '';
+          if (!authEmail.value.trim() || !authPassword.value) {
+            authError.value = '请填写邮箱和密码';
+            return;
+          }
+          if (authPassword.value.length < 6) {
+            authError.value = '密码至少需要6位';
+            return;
+          }
+          authLoading.value = true;
+          var promise;
+          if (authMode.value === 'login') {
+            promise = auth.signInWithEmailAndPassword(authEmail.value, authPassword.value);
+          } else {
+            promise = auth.createUserWithEmailAndPassword(authEmail.value, authPassword.value);
+          }
+          promise.then(function() {
+            showAuthModal.value = false;
+            authEmail.value = ''; authPassword.value = ''; authError.value = '';
+          }).catch(function(err) {
+            var msgs = {
+              'auth/user-not-found': '该邮箱未注册',
+              'auth/wrong-password': '密码错误',
+              'auth/invalid-email': '邮箱格式不正确',
+              'auth/email-already-in-use': '该邮箱已注册',
+              'auth/weak-password': '密码强度不够',
+              'auth/invalid-credential': '邮箱或密码错误',
+            };
+            authError.value = msgs[err.code] || err.message;
+          }).finally(function() { authLoading.value = false; });
+        }
+
+        function logout() {
+          auth.signOut();
+          currentUser.value = null;
+          syncStatus.value = '';
+        }
+
+        function cloudSave() {
+          if (!currentUser.value || isSyncing.value) return;
+          isSyncing.value = true;
+          syncStatus.value = '同步中...';
+          var data = {
+            tasks: tasks.value,
+            records: dailyRecords.value,
+            categories: categories.value,
+            subcategories: subcategories.value,
+            notes: Object.assign({}, dailyNotes),
+            recurringState: Object.assign({}, recurringState),
+            dismissedRecurring: Object.assign({}, dismissedRecurring),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          db.collection('flowday_data').doc(currentUser.value.uid).set(data)
+            .then(function() {
+              syncStatus.value = '已同步';
+              setTimeout(function() { if (syncStatus.value === '已同步') syncStatus.value = ''; }, 3000);
+            })
+            .catch(function(err) {
+              console.error('Sync error:', err);
+              syncStatus.value = '同步失败';
+              setTimeout(function() { if (syncStatus.value === '同步失败') syncStatus.value = ''; }, 5000);
+            })
+            .finally(function() { isSyncing.value = false; });
+        }
+
+        function cloudLoad() {
+          if (!currentUser.value) return Promise.resolve();
+          syncStatus.value = '同步中...';
+          return db.collection('flowday_data').doc(currentUser.value.uid).get()
+            .then(function(doc) {
+              if (doc.exists) {
+                var data = doc.data();
+                if (data.tasks) tasks.value = data.tasks;
+                if (data.records) dailyRecords.value = data.records;
+                if (data.categories) categories.value = data.categories;
+                if (data.subcategories) subcategories.value = data.subcategories;
+                if (data.notes) {
+                  Object.keys(dailyNotes).forEach(function(k) { delete dailyNotes[k]; });
+                  Object.assign(dailyNotes, data.notes);
+                }
+                if (data.recurringState) {
+                  Object.keys(recurringState).forEach(function(k) { delete recurringState[k]; });
+                  Object.assign(recurringState, data.recurringState);
+                }
+                if (data.dismissedRecurring) {
+                  Object.keys(dismissedRecurring).forEach(function(k) { delete dismissedRecurring[k]; });
+                  Object.assign(dismissedRecurring, data.dismissedRecurring);
+                }
+                saveTasks(); saveRecords(); saveCategories(); saveSubcats(); saveNotes(); saveRecurringState(); saveDismissed();
+                dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+              }
+              syncStatus.value = '已同步';
+              setTimeout(function() { if (syncStatus.value === '已同步') syncStatus.value = ''; }, 3000);
+            })
+            .catch(function(err) {
+              console.error('Load error:', err);
+              syncStatus.value = '同步失败';
+              setTimeout(function() { syncStatus.value = ''; }, 5000);
+            });
+        }
+
+        function scheduleSync() {
+          if (!currentUser.value) return;
+          clearTimeout(syncTimer);
+          syncTimer = setTimeout(cloudSave, 2000);
+        }
+
+        function syncNow() {
+          if (currentUser.value) cloudSave();
         }
 
         watch(selectedDate, function() {
@@ -1291,6 +1486,14 @@
         onMounted(function() {
           load();
           dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+          auth.onAuthStateChanged(function(user) {
+            if (user) {
+              currentUser.value = { uid: user.uid, email: user.email };
+              cloudLoad();
+            } else {
+              currentUser.value = null;
+            }
+          });
         });
 
         return {
@@ -1329,6 +1532,9 @@
           addSubcategory: addSubcategory, removeSubcategory: removeSubcategory,
           saveCategories: saveCategories, saveDailyNote: saveDailyNote, debounceSaveNote: debounceSaveNote,
           exportData: exportData, importData: importData, clearAllData: clearAllData,
+          currentUser: currentUser, showAuthModal: showAuthModal, authMode: authMode,
+          authEmail: authEmail, authPassword: authPassword, authError: authError, authLoading: authLoading,
+          syncStatus: syncStatus, submitAuth: submitAuth, logout: logout, syncNow: syncNow,
         };
       }
     });
