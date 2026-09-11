@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>FlowDay - 流日程</title>
+  <meta name="description" content="灵活的日程管理与行动记录工具" />
+  <meta name="theme-color" content="#6366F1" />
+  <link rel="manifest" href="manifest.json" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cat: {
+              class: { DEFAULT: '#8B5CF6', light: '#EDE9FE', medium: '#C4B5FD' },
+              work: { DEFAULT: '#3B82F6', light: '#DBEAFE', medium: '#93C5FD' },
+              study: { DEFAULT: '#10B981', light: '#D1FAE5', medium: '#6EE7B7' },
+              life: { DEFAULT: '#F59E0B', light: '#FEF3C7', medium: '#FCD34D' },
+            },
+            period: { short: '#EC4899', mid: '#06B6D4', long: '#F97316' }
+          },
+          fontFamily: { sans: ['"Inter"', '"Noto Sans SC"', 'system-ui', '-apple-system', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, sans-serif; }
+    body { background: linear-gradient(135deg, #F8FAFC 0%, #F0F4FF 40%, #FDF2F8 70%, #F8FAFC 100%); min-height: 100vh; overflow-x: hidden; position: relative; }
+    body::before { content: ''; position: fixed; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.04) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(168,85,247,0.04) 0%, transparent 50%), radial-gradient(ellipse at 60% 30%, rgba(236,72,153,0.03) 0%, transparent 40%); pointer-events: none; z-index: 0; }
+    .card-hover { transition: all 0.2s ease; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(99,102,241,0.12), 0 4px 10px -3px rgba(0,0,0,0.06); }
+    .task-card { transition: all 0.25s ease; }
+    .task-card:active { transform: scale(0.98); }
+    .glass { background: rgba(255,255,255,0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    .category-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .period-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 9999px; font-weight: 600; letter-spacing: 0.02em; }
+    .checkbox-custom { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid #CBD5E1; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .checkbox-custom.checked { border-color: transparent; }
+    .checkbox-custom.checked::after { content: '\2713'; color: white; font-size: 12px; font-weight: 700; }
+    .modal-overlay { background: rgba(15,23,42,0.4); backdrop-filter: blur(4px); }
+    input, textarea, select { font-family: inherit; }
+    textarea { resize: vertical; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 2px; }
+    .streak-flame { animation: flicker 1.5s ease-in-out infinite alternate; }
+    @keyframes flicker { 0% { transform: scale(1); } 100% { transform: scale(1.1); } }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .time-badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 6px; background: #F1F5F9; color: #64748B; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .day-toggle { width: 32px; height: 32px; border-radius: 50%; font-size: 0.75rem; font-weight: 600; transition: all 0.15s ease; }
+    .day-toggle.active { color: white; }
+    .note-saved { animation: noteFlash 1.5s ease; }
+    @keyframes noteFlash { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    .timeline-container { position: relative; }
+    .timeline-hour-line { position: absolute; left: 48px; right: 0; border-top: 1px solid #F1F5F9; }
+    .timeline-hour-label { position: absolute; left: 0; width: 44px; text-align: right; font-size: 0.7rem; color: #94A3B8; font-variant-numeric: tabular-nums; transform: translateY(-50%); }
+    .timeline-block { position: absolute; left: 52px; right: 4px; border-radius: 8px; padding: 4px 10px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; transition: all 0.2s ease; cursor: default; }
+    .timeline-block:hover { filter: brightness(0.95); transform: scale(1.01); }
+    .timeline-block-title { font-size: 0.75rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .timeline-block-time { font-size: 0.65rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/template" id="tpl-app">
+    <div class="min-h-screen pb-20 md:pb-0 md:pl-64 relative z-10">
+      <!-- Desktop Sidebar -->
+      <aside class="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:w-64 bg-white/80 backdrop-blur-xl border-r border-white/40 z-30">
+        <div class="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">F</div>
+          <div>
+            <h1 class="text-lg font-bold text-slate-800">FlowDay</h1>
+            <p class="text-xs text-slate-400">流日程</p>
+          </div>
+        </div>
+        <nav class="flex-1 px-3 py-4 space-y-1">
+          <button v-for="v in views" :key="v.id" @click="currentView = v.id"
+            :class="['w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all', currentView === v.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700']">
+            <span class="text-lg">{{ v.icon }}</span>
+            <span>{{ v.label }}</span>
+          </button>
+        </nav>
+        <div class="px-4 py-4 border-t border-slate-100">
+          <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="streak-flame text-lg">&#128293;</span>
+              <span class="text-sm font-semibold text-slate-700">连续 {{ streakDays }} 天</span>
+            </div>
+            <p class="text-xs text-slate-500">坚持记录每一天</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Mobile Header -->
+      <header class="md:hidden sticky top-0 z-30 glass border-b border-slate-100">
+        <div class="flex items-center justify-between px-4 py-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs">F</div>
+            <span class="font-bold text-slate-800">FlowDay</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="streak-flame text-sm">&#128293;</span>
+            <span class="text-xs font-semibold text-slate-600">{{ streakDays }}天</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="max-w-4xl mx-auto px-4 py-4 md:py-6">
+        <!-- Date Navigator -->
+        <div class="flex items-center justify-between mb-5">
+          <button @click="navigateDate(-1)" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-slate-100 transition text-slate-500">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="text-center">
+            <h2 class="text-lg font-bold text-slate-800">{{ formatDateHeader(selectedDate) }}</h2>
+            <p class="text-xs text-slate-400">{{ formatDateSub(selectedDate) }}</p>
+          </div>
+          <button @click="navigateDate(1)" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-slate-100 transition text-slate-500">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+        <!-- TODAY VIEW -->
+        <div v-if="currentView === 'today'">
+          <div class="grid grid-cols-4 gap-2 mb-5">
+            <div v-for="cat in mainCategories" :key="cat.id" class="card-hover rounded-xl p-3 text-center cursor-pointer" :style="{ background: cat.light }" @click="openAddTaskModal(true, cat.id)">
+              <div class="text-lg mb-1">{{ cat.icon }}</div>
+              <div class="text-lg font-bold" :style="{ color: cat.color }">{{ getCategoryCount(cat.id) }}</div>
+              <div class="text-xs text-slate-500 truncate">{{ cat.name }}</div>
+            </div>
+          </div>
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-slate-700">{{ selectedDateLabel }}行动</h3>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">{{ todayDoneCount }}/{{ todayActions.length }}</span>
+                <div class="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500" :style="{ width: todayProgress + '%' }"></div>
+                </div>
+              </div>
+            </div>
+            <div v-if="todayActions.length === 0" class="text-center py-12">
+              <div class="text-4xl mb-3">&#128203;</div>
+              <p class="text-slate-400 text-sm mb-3">{{ isToday ? '今天还没有行动安排' : '这天还没有行动安排' }}</p>
+              <button @click="openAddTaskModal(true)" class="px-4 py-2 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 transition">添加行动到{{ selectedDateLabel }}</button>
+            </div>
+            <div v-else class="space-y-2">
+              <div v-for="action in todayActions" :key="action.id" class="task-card bg-white rounded-xl p-4 border border-slate-100" :class="{ 'opacity-60': action.done }">
+                <div class="flex items-start gap-3">
+                  <div class="checkbox-custom mt-0.5" :class="{ checked: action.done }" :style="action.done ? { background: getCategoryColor(action.category) } : {}" @click="toggleTodayAction(action)"></div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="category-dot" :style="{ background: getCategoryColor(action.category) }"></span>
+                      <span class="text-sm font-medium text-slate-700 truncate">{{ action.title }}</span>
+                      <span v-if="action.startTime" class="time-badge ml-auto flex-shrink-0">{{ action.startTime }}<span v-if="action.endTime">-{{ action.endTime }}</span></span>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-xs text-slate-400">{{ getCategoryName(action.category) }}</span>
+                      <template v-if="action.subcategory">
+                        <span class="text-xs text-slate-300">&middot;</span>
+                        <span class="text-xs text-slate-400">{{ action.subcategory }}</span>
+                      </template>
+                      <span v-if="getTaskPeriod(action.taskId)" class="period-badge" :style="{ background: getPeriodColor(getTaskPeriod(action.taskId)) + '20', color: getPeriodColor(getTaskPeriod(action.taskId)) }">{{ getPeriodName(getTaskPeriod(action.taskId)) }}</span>
+                      <span v-if="getTaskRecurrenceText(action.taskId)" class="text-xs text-indigo-400">{{ getTaskRecurrenceText(action.taskId) }}</span>
+                    </div>
+                    <div v-if="editingTimeId === action.id" class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-50">
+                      <span class="text-xs text-slate-400">开始</span>
+                      <input type="time" :value="action.startTime" @change="setActionTime(action, 'startTime', $event.target.value)" class="px-2 py-1 bg-slate-50 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+                      <span class="text-xs text-slate-400">结束</span>
+                      <input type="time" :value="action.endTime" @change="setActionTime(action, 'endTime', $event.target.value)" class="px-2 py-1 bg-slate-50 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+                      <button @click="editingTimeId = ''" class="text-xs text-slate-400 hover:text-slate-600 ml-1">完成</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-0.5 flex-shrink-0">
+                    <button @click="toggleTimeEdit(action.id)" class="text-slate-300 hover:text-indigo-400 transition p-1" :class="{ 'text-indigo-400': editingTimeId === action.id }">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </button>
+                    <button @click="removeTodayAction(action.id)" class="text-slate-300 hover:text-red-400 transition p-1">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-if="availableTasks.length > 0" class="mb-4">
+            <h3 class="font-semibold text-slate-700 mb-3">从任务池添加到{{ selectedDateLabel }}</h3>
+            <div class="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 no-scrollbar">
+              <button v-for="task in availableTasks" :key="task.id" @click="addToToday(task.id)" class="task-card flex-shrink-0 bg-white rounded-xl px-4 py-3 border border-slate-100 text-left" style="max-width:200px">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="category-dot" :style="{ background: getCategoryColor(task.category) }"></span>
+                  <span class="text-sm font-medium text-slate-700 truncate">{{ task.title }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-slate-400">{{ getCategoryName(task.category) }}</span>
+                  <span v-if="task.period" class="period-badge" :style="{ background: getPeriodColor(task.period) + '20', color: getPeriodColor(task.period) }">{{ getPeriodName(task.period) }}</span>
+                </div>
+              </button>
+            </div>
+          </div>
+          <button @click="openAddTaskModal(true)" class="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            新建行动
+          </button>
+
+          <!-- Daily Notes -->
+          <div class="mt-5">
+            <div class="bg-white rounded-2xl border border-slate-100 p-4">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-base">&#9997;</span>
+                <h3 class="font-semibold text-slate-700">今日心得</h3>
+                <span v-if="noteSaved" class="ml-auto text-xs text-emerald-500 note-saved">&#10003; 已保存</span>
+              </div>
+              <textarea
+                v-model="dailyNoteInput"
+                @input="debounceSaveNote"
+                placeholder="记录今天的想法、感悟或反思..."
+                rows="4"
+                class="w-full px-4 py-3 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition leading-relaxed"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- TASK POOL VIEW -->
+        <div v-if="currentView === 'pool'">
+          <div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+            <button v-for="f in poolFilters" :key="f.id" @click="poolFilter = f.id"
+              :class="['flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all', poolFilter === f.id ? 'bg-indigo-500 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200']">
+              {{ f.label }}
+            </button>
+          </div>
+          <div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+            <button @click="filterCategory = null" :class="['flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all', !filterCategory ? 'bg-slate-700 text-white' : 'bg-white text-slate-500 border border-slate-200']">全部</button>
+            <button v-for="cat in mainCategories" :key="cat.id" @click="filterCategory = filterCategory === cat.id ? null : cat.id"
+              :class="['flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all']"
+              :style="filterCategory === cat.id ? { background: cat.color, color: 'white' } : { background: 'white', color: '#64748B', border: '1px solid #E2E8F0' }">
+              {{ cat.icon }} {{ cat.name }}
+            </button>
+          </div>
+          <div v-if="filteredTasks.length === 0" class="text-center py-12">
+            <div class="text-4xl mb-3">&#127919;</div>
+            <p class="text-slate-400 text-sm mb-3">还没有任务</p>
+            <button @click="openAddTaskModal(false)" class="px-4 py-2 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 transition">创建任务</button>
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="task in filteredTasks" :key="task.id" class="task-card bg-white rounded-xl p-4 border border-slate-100 card-hover cursor-pointer" @click="openEditTaskModal(task)">
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0" :style="{ background: getCategoryColor(task.category) + '18' }">
+                  {{ getCategoryIcon(task.category) }}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <h4 class="text-sm font-semibold text-slate-700 truncate">{{ task.title }}</h4>
+                    <span v-if="task.period" class="period-badge" :style="{ background: getPeriodColor(task.period) + '20', color: getPeriodColor(task.period) }">{{ getPeriodName(task.period) }}</span>
+                    <span v-if="task.recurrence && task.recurrence !== 'none'" class="text-xs text-indigo-400 font-medium">{{ getRecurrenceText(task) }}</span>
+                  </div>
+                  <p v-if="task.description" class="text-xs text-slate-400 mb-2" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ task.description }}</p>
+                  <div class="flex items-center gap-3 flex-wrap">
+                    <span class="text-xs text-slate-400">{{ getCategoryName(task.category) }}</span>
+                    <template v-if="task.subcategory">
+                      <span class="text-xs text-slate-300">&middot;</span>
+                      <span class="text-xs text-slate-400">{{ task.subcategory }}</span>
+                    </template>
+                    <span v-if="task.deadline" class="text-xs" :class="isOverdue(task) ? 'text-red-400 font-medium' : 'text-slate-400'">
+                      {{ isOverdue(task) ? '已逾期' : '截止' }} {{ formatDate(task.deadline) }}
+                    </span>
+                    <div v-if="task.period === 'mid' && task.deadline" class="flex items-center gap-1">
+                      <div class="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all" :style="{ width: getTaskProgress(task) + '%', background: getPeriodColor(task.period) }"></div>
+                      </div>
+                      <span class="text-xs text-slate-400">{{ getTaskProgress(task) }}%</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex flex-col items-end gap-1">
+                  <span :class="['text-xs px-2 py-0.5 rounded-full font-medium', task.status === 'active' ? 'bg-emerald-50 text-emerald-600' : task.status === 'paused' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400']">
+                    {{ task.status === 'active' ? '进行中' : task.status === 'paused' ? '已暂停' : '已完成' }}
+                  </span>
+                  <span v-if="getTaskTodayCount(task.id)" class="text-xs text-indigo-400">今日 +{{ getTaskTodayCount(task.id) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button @click="openAddTaskModal(false)" class="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-500 text-white rounded-2xl shadow-lg shadow-indigo-200 flex items-center justify-center hover:shadow-xl transition-all active:scale-95 z-20">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          </button>
+        </div>
+
+        <!-- CALENDAR VIEW -->
+        <div v-if="currentView === 'calendar'">
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <button @click="calendarMonth = calendarMonth - 1" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 transition text-slate-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+              </button>
+              <h3 class="font-semibold text-slate-700">{{ calendarTitle }}</h3>
+              <button @click="calendarMonth = calendarMonth + 1" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 transition text-slate-500">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 mb-2">
+              <div v-for="d in weekDays" :key="d" class="text-center text-xs text-slate-400 font-medium py-1">{{ d }}</div>
+            </div>
+            <div class="grid grid-cols-7 gap-1">
+              <div v-for="(day, i) in calendarDays" :key="i"
+                :class="['aspect-square rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all text-sm relative', day.currentMonth ? (day.isToday ? 'bg-indigo-500 text-white font-bold' : day.hasRecords ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50') : 'text-slate-200']"
+                @click="selectedDate = day.date; currentView = 'today'">
+                {{ day.dayNum }}
+                <div v-if="day.hasRecords && !day.isToday" class="flex gap-0.5 mt-0.5">
+                  <div v-for="c in day.categoryColors" :key="c" class="w-1.5 h-1.5 rounded-full" :style="{ background: c }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-100 p-4">
+            <h3 class="font-semibold text-slate-700 mb-3">{{ formatDate(selectedDate) }} 的行动</h3>
+            <div v-if="getDayRecords(selectedDate).length === 0" class="text-center py-6">
+              <p class="text-slate-400 text-sm">这天没有行动记录</p>
+            </div>
+            <div v-else class="space-y-2">
+              <div v-for="rec in getDayRecordsSorted(selectedDate)" :key="rec.id" class="flex items-center gap-3 py-2">
+                <div class="checkbox-custom" :class="{ checked: rec.done }" :style="rec.done ? { background: getCategoryColor(rec.category) } : {}"></div>
+                <span class="category-dot" :style="{ background: getCategoryColor(rec.category) }"></span>
+                <span v-if="rec.startTime" class="time-badge flex-shrink-0">{{ rec.startTime }}<span v-if="rec.endTime">-{{ rec.endTime }}</span></span>
+                <span class="text-sm text-slate-600 flex-1">{{ rec.title }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TIMELINE VIEW -->
+        <div v-if="currentView === 'stats'">
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="font-semibold text-slate-700">{{ formatDateHeader(selectedDate) }} 时间线</h3>
+              <span class="text-xs text-slate-400">{{ timedActionCount }} 个行动 · {{ totalTimedText }}</span>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">{{ formatDateSub(selectedDate) }}</p>
+
+            <div v-if="timelineData.actions.length === 0" class="text-center py-10">
+              <div class="text-3xl mb-2">&#128340;</div>
+              <p class="text-slate-400 text-sm mb-1">这天还没有设置时间的行动</p>
+              <p class="text-slate-300 text-xs">在今日视图中点击时钟图标可以设置时间</p>
+            </div>
+
+            <div v-else class="timeline-container" :style="{ height: timelineData.totalHeight + 'px' }">
+              <div v-for="h in timelineData.hours" :key="h.hour">
+                <div class="timeline-hour-line" :style="{ top: h.top + 'px' }"></div>
+                <div class="timeline-hour-label" :style="{ top: h.top + 'px' }">{{ h.label }}</div>
+              </div>
+              <div v-for="item in timelineData.actions" :key="item.action.id" class="timeline-block"
+                :style="{ top: item.top + 'px', height: item.height + 'px', background: getCategoryColor(item.action.category) + '18', borderLeft: '3px solid ' + getCategoryColor(item.action.category) }">
+                <div class="timeline-block-title" :style="{ color: getCategoryColor(item.action.category) }">
+                  <span class="category-dot mr-1" :style="{ background: getCategoryColor(item.action.category), display: 'inline-block', verticalAlign: 'middle', width: '6px', height: '6px' }"></span>
+                  {{ item.action.title }}
+                </div>
+                <div v-if="item.height >= 36" class="timeline-block-time" :style="{ color: getCategoryColor(item.action.category) }">
+                  {{ item.action.startTime }}<span v-if="item.action.endTime">-{{ item.action.endTime }}</span>
+                  <span class="ml-1 opacity-60">({{ formatDuration(item.durationMin) }})</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="untimedActions.length > 0" class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <h3 class="font-semibold text-slate-700 mb-3">未设时间的行动 <span class="text-xs text-slate-400 font-normal">({{ untimedActions.length }})</span></h3>
+            <div class="space-y-2">
+              <div v-for="action in untimedActions" :key="action.id" class="flex items-center gap-3 py-1.5">
+                <div class="checkbox-custom" :class="{ checked: action.done }" :style="action.done ? { background: getCategoryColor(action.category) } : {}"></div>
+                <span class="category-dot" :style="{ background: getCategoryColor(action.category) }"></span>
+                <span class="text-sm text-slate-600 flex-1 truncate">{{ action.title }}</span>
+                <span class="text-xs text-slate-300">{{ getCategoryName(action.category) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <h3 class="font-semibold text-slate-700 mb-4">时间分布</h3>
+            <div v-if="totalAllCategoryMinutes === 0" class="text-center py-4">
+              <p class="text-slate-400 text-sm">设置行动的时间后这里会显示分类时间分布</p>
+            </div>
+            <div v-else class="space-y-3">
+              <div v-for="cat in mainCategories" :key="cat.id">
+                <div class="flex items-center justify-between mb-1">
+                  <div class="flex items-center gap-2">
+                    <span>{{ cat.icon }}</span>
+                    <span class="text-sm text-slate-600">{{ cat.name }}</span>
+                  </div>
+                  <span class="text-sm font-semibold" :style="{ color: cat.color }">{{ getCategoryTimeText(cat.id) }}</span>
+                </div>
+                <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all duration-500" :style="{ width: getCategoryTimePercent(cat.id) + '%', background: cat.color }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-4">
+            <h3 class="font-semibold text-slate-700 mb-3">数据管理</h3>
+            <div class="flex flex-wrap gap-2">
+              <button @click="exportData" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition">导出数据</button>
+              <label class="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition cursor-pointer">
+                导入数据
+                <input type="file" accept=".json" @change="importData" style="display:none" />
+              </label>
+              <button @click="clearAllData" class="px-4 py-2 bg-red-50 text-red-500 rounded-xl text-sm font-medium hover:bg-red-100 transition">清除所有数据</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div v-if="currentView === 'settings'">
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <h3 class="font-semibold text-slate-700 mb-4">分类管理</h3>
+            <div class="space-y-2 mb-4">
+              <div v-for="cat in categories" :key="cat.id" class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                <input type="color" :value="cat.color" @input="cat.color = $event.target.value; saveCategories()" class="w-8 h-8 rounded-lg border-0 cursor-pointer" />
+                <input v-model="cat.name" @change="saveCategories" class="flex-1 bg-transparent text-sm text-slate-700 outline-none" />
+                <input v-model="cat.icon" @change="saveCategories" class="w-8 text-center bg-transparent text-lg outline-none" />
+                <button v-if="!cat.builtin" @click="removeCategory(cat.id)" class="text-slate-300 hover:text-red-400 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </button>
+              </div>
+            </div>
+            <button @click="addCategory" class="w-full py-2 border border-dashed border-slate-200 rounded-xl text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition">+ 添加分类</button>
+          </div>
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <h3 class="font-semibold text-slate-700 mb-4">子分类管理</h3>
+            <div v-for="cat in categories" :key="'sub-'+cat.id" class="mb-3">
+              <div class="flex items-center gap-2 mb-2">
+                <span>{{ cat.icon }}</span>
+                <span class="text-sm font-medium text-slate-600">{{ cat.name }}</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5 mb-2">
+                <span v-for="sub in getSubcategories(cat.id)" :key="sub" class="px-2.5 py-1 rounded-full text-xs font-medium" :style="{ background: cat.color + '18', color: cat.color }">
+                  {{ sub }}
+                  <button @click="removeSubcategory(cat.id, sub)" class="ml-1 opacity-50 hover:opacity-100">&times;</button>
+                </span>
+                <span v-if="getSubcategories(cat.id).length === 0" class="text-xs text-slate-300">暂无子分类</span>
+              </div>
+              <div class="flex gap-2">
+                <input v-model="newSubcategoryInput[cat.id]" @keyup.enter="addSubcategory(cat.id)" :placeholder="'添加子分类...'" class="flex-1 px-3 py-1.5 bg-slate-50 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
+                <button @click="addSubcategory(cat.id)" class="px-3 py-1.5 bg-slate-100 rounded-lg text-sm text-slate-500 hover:bg-slate-200 transition">添加</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Mobile Bottom Nav -->
+      <nav class="md:hidden fixed bottom-0 inset-x-0 glass border-t border-white/40 z-30">
+        <div class="flex items-center justify-around py-2">
+          <button v-for="v in mobileViews" :key="v.id" @click="currentView = v.id" class="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all" :class="currentView === v.id ? 'text-indigo-600' : 'text-slate-400'">
+            <span class="text-xl">{{ v.icon }}</span>
+            <span style="font-size:10px" class="font-medium">{{ v.label }}</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Task Modal -->
+      <div v-if="showTaskModal" class="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+        <div class="modal-overlay absolute inset-0" @click="closeTaskModal"></div>
+        <div class="relative bg-white w-full md:max-w-lg md:rounded-2xl rounded-t-2xl shadow-2xl" style="max-height:90vh;overflow-y:auto">
+          <div class="sticky top-0 bg-white border-b border-slate-100 px-5 py-4 flex items-center justify-between rounded-t-2xl z-10">
+            <h3 class="font-bold text-slate-800">{{ editingTask ? '编辑任务' : '新建任务' }}</h3>
+            <button @click="closeTaskModal" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-slate-100 transition text-slate-400">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">任务标题</label>
+              <input v-model="taskForm.title" placeholder="例如：阅读《深度学习》第3章" class="w-full px-4 py-3 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" />
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">描述 (可选)</label>
+              <textarea v-model="taskForm.description" placeholder="补充说明..." rows="2" class="w-full px-4 py-3 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition"></textarea>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-2 block">分类</label>
+              <div class="flex flex-wrap gap-2">
+                <button v-for="cat in categories" :key="cat.id" @click="taskForm.category = cat.id"
+                  :class="['px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-1.5']"
+                  :style="taskForm.category === cat.id ? { background: cat.color, color: 'white' } : { background: cat.light || '#F1F5F9', color: cat.color || '#64748B' }">
+                  <span>{{ cat.icon }}</span><span>{{ cat.name }}</span>
+                </button>
+              </div>
+            </div>
+            <div v-if="taskForm.category && getSubcategories(taskForm.category).length > 0">
+              <label class="text-xs font-medium text-slate-500 mb-2 block">子分类</label>
+              <div class="flex flex-wrap gap-2">
+                <button v-for="sub in getSubcategories(taskForm.category)" :key="sub" @click="taskForm.subcategory = taskForm.subcategory === sub ? '' : sub"
+                  :class="['px-3 py-1.5 rounded-full text-xs font-medium transition-all']"
+                  :style="taskForm.subcategory === sub ? { background: getCategoryColor(taskForm.category), color: 'white' } : { background: getCategoryColor(taskForm.category) + '15', color: getCategoryColor(taskForm.category) }">
+                  {{ sub }}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-2 block">任务周期</label>
+              <div class="flex gap-2">
+                <button v-for="p in periods" :key="p.id" @click="taskForm.period = p.id"
+                  :class="['flex-1 py-2.5 rounded-xl text-sm font-medium transition-all text-center']"
+                  :style="taskForm.period === p.id ? { background: p.color, color: 'white' } : { background: p.color + '12', color: p.color }">
+                  {{ p.label }}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">截止日期 (可选)</label>
+              <input type="date" v-model="taskForm.deadline" class="w-full px-4 py-3 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" />
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-2 block">重复</label>
+              <div class="flex gap-2">
+                <button v-for="r in recurrenceOptions" :key="r.id" @click="taskForm.recurrence = r.id"
+                  :class="['flex-1 py-2.5 rounded-xl text-xs font-medium transition-all text-center']"
+                  :style="taskForm.recurrence === r.id ? { background: '#6366F1', color: 'white' } : { background: '#F1F5F9', color: '#64748B' }">
+                  {{ r.label }}
+                </button>
+              </div>
+            </div>
+            <div v-if="taskForm.recurrence === 'weekly'">
+              <label class="text-xs font-medium text-slate-500 mb-2 block">选择重复日</label>
+              <div class="flex gap-1.5 justify-center">
+                <button v-for="(name, idx) in weekDays" :key="idx" @click="toggleRecurrenceDay(idx)"
+                  :class="['day-toggle flex items-center justify-center', taskForm.recurrenceDays.indexOf(idx) >= 0 ? 'active' : '']"
+                  :style="taskForm.recurrenceDays.indexOf(idx) >= 0 ? { background: '#6366F1' } : { background: '#F1F5F9', color: '#64748B' }">
+                  {{ name }}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">标签 (回车添加)</label>
+              <div class="flex flex-wrap gap-1.5 mb-2">
+                <span v-for="tag in taskForm.tags" :key="tag" class="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium">
+                  {{ tag }}
+                  <button @click="taskForm.tags = taskForm.tags.filter(function(t) { return t !== tag; })" class="ml-1 opacity-60 hover:opacity-100">&times;</button>
+                </span>
+              </div>
+              <input v-model="tagInput" @keyup.enter="addTag" @keydown.tab.prevent="addTag" placeholder="输入标签..." class="w-full px-4 py-2.5 bg-slate-50 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" />
+            </div>
+            <div v-if="!editingTask" class="p-3 bg-indigo-50 rounded-xl">
+              <label class="text-xs font-medium text-indigo-600 mb-2 block">安排到日期（可选，选择后任务将自动加入该日行动）</label>
+              <input type="date" v-model="taskForm.targetDate" class="w-full px-3 py-2.5 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition mb-2" />
+              <div v-if="taskForm.targetDate" class="flex items-center gap-2">
+                <span class="text-xs text-slate-500">时间</span>
+                <input type="time" v-model="taskForm.startTime" class="flex-1 px-3 py-2 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" placeholder="开始" />
+                <span class="text-xs text-slate-400">至</span>
+                <input type="time" v-model="taskForm.endTime" class="flex-1 px-3 py-2 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-200 transition" placeholder="结束" />
+              </div>
+            </div>
+            <div class="flex gap-2 pt-2">
+              <button v-if="editingTask" @click="deleteTask" class="px-4 py-3 bg-red-50 text-red-500 rounded-xl text-sm font-medium hover:bg-red-100 transition">删除</button>
+              <div class="flex-1"></div>
+              <button @click="closeTaskModal" class="px-5 py-3 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition">取消</button>
+              <button @click="saveTask" class="px-5 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-xl text-sm font-medium hover:opacity-90 transition shadow-lg shadow-indigo-200">
+                {{ editingTask ? '保存' : '创建' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </script>
+
+  <script>
+    var createApp = Vue.createApp;
+    var ref = Vue.ref;
+    var reactive = Vue.reactive;
+    var computed = Vue.computed;
+    var watch = Vue.watch;
+    var onMounted = Vue.onMounted;
+
+    var app = createApp({
+      template: '#tpl-app',
+      setup: function() {
+        var STORAGE_KEYS = { tasks: 'fd_tasks', records: 'fd_records', categories: 'fd_categories', subcats: 'fd_subcats', notes: 'fd_notes', recurringState: 'fd_recurring_state', dismissed: 'fd_dismissed_recurring' };
+
+        var defaultCategories = [
+          { id: 'class', name: '上课', icon: '\uD83D\uDCDA', color: '#8B5CF6', light: '#EDE9FE', builtin: true },
+          { id: 'work', name: '工作', icon: '\uD83D\uDCBC', color: '#3B82F6', light: '#DBEAFE', builtin: true },
+          { id: 'study', name: '学习', icon: '\uD83D\uDD2C', color: '#10B981', light: '#D1FAE5', builtin: true },
+          { id: 'life', name: '生活', icon: '\uD83C\uDF08', color: '#F59E0B', light: '#FEF3C7', builtin: true },
+        ];
+
+        var defaultSubcats = {
+          class: [],
+          work: ['值班', '助教', '导师任务'],
+          study: ['读书', '论文', '科研', '语言学习', '资料搜集'],
+          life: ['聚餐', '娱乐', '休闲', '运动'],
+        };
+
+        var periods = [
+          { id: 'short', label: '短期', color: '#EC4899' },
+          { id: 'mid', label: '中期', color: '#06B6D4' },
+          { id: 'long', label: '长期', color: '#F97316' },
+        ];
+
+        var views = [
+          { id: 'today', label: '今日', icon: '\u2600\uFE0F' },
+          { id: 'pool', label: '任务池', icon: '\uD83C\uDFAF' },
+          { id: 'calendar', label: '日历', icon: '\uD83D\uDCC5' },
+          { id: 'stats', label: '时间线', icon: '\uD83D\uDD50' },
+          { id: 'settings', label: '设置', icon: '\u2699\uFE0F' },
+        ];
+
+        var mobileViews = views;
+        var weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+        var poolFilters = [
+          { id: 'all', label: '全部' },
+          { id: 'active', label: '进行中' },
+          { id: 'paused', label: '已暂停' },
+          { id: 'completed', label: '已完成' },
+          { id: 'short', label: '短期' },
+          { id: 'mid', label: '中期' },
+          { id: 'long', label: '长期' },
+        ];
+        var recurrenceOptions = [
+          { id: 'none', label: '不重复' },
+          { id: 'daily', label: '每天' },
+          { id: 'weekly', label: '每周' },
+          { id: 'monthly', label: '每月' },
+        ];
+
+        var currentView = ref('today');
+        var selectedDate = ref((function(){ var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })());
+        var tasks = ref([]);
+        var dailyRecords = ref([]);
+        var categories = ref(JSON.parse(JSON.stringify(defaultCategories)));
+        var subcategories = ref(JSON.parse(JSON.stringify(defaultSubcats)));
+        var dailyNotes = reactive({});
+        var recurringState = reactive({});
+        var dismissedRecurring = reactive({});
+        var showTaskModal = ref(false);
+        var editingTask = ref(null);
+        var addToTodayFlag = ref(false);
+        var filterCategory = ref(null);
+        var poolFilter = ref('all');
+        var tagInput = ref('');
+        var calendarMonth = ref(new Date().getMonth());
+        var calendarYear = ref(new Date().getFullYear());
+        var newSubcategoryInput = reactive({});
+        var editingTimeId = ref('');
+        var dailyNoteInput = ref('');
+        var noteSaved = ref(false);
+
+        var taskForm = reactive({
+          title: '', description: '', category: 'study', subcategory: '',
+          period: 'short', deadline: '', tags: [], status: 'active', addToToday: false,
+          recurrence: 'none', recurrenceDays: [], targetDate: '',
+          startTime: '', endTime: '',
+        });
+
+        function load() {
+          try {
+            var t = localStorage.getItem(STORAGE_KEYS.tasks);
+            if (t) tasks.value = JSON.parse(t);
+            var r = localStorage.getItem(STORAGE_KEYS.records);
+            if (r) dailyRecords.value = JSON.parse(r);
+            var c = localStorage.getItem(STORAGE_KEYS.categories);
+            if (c) categories.value = JSON.parse(c);
+            var s = localStorage.getItem(STORAGE_KEYS.subcats);
+            if (s) subcategories.value = JSON.parse(s);
+            var n = localStorage.getItem(STORAGE_KEYS.notes);
+            if (n) Object.assign(dailyNotes, JSON.parse(n));
+            var rs = localStorage.getItem(STORAGE_KEYS.recurringState);
+            if (rs) Object.assign(recurringState, JSON.parse(rs));
+            var dr = localStorage.getItem(STORAGE_KEYS.dismissed);
+            if (dr) Object.assign(dismissedRecurring, JSON.parse(dr));
+          } catch (e) { console.error('Load error:', e); }
+        }
+
+        function saveTasks() { localStorage.setItem(STORAGE_KEYS.tasks, JSON.stringify(tasks.value)); }
+        function saveRecords() { localStorage.setItem(STORAGE_KEYS.records, JSON.stringify(dailyRecords.value)); }
+        function saveCategories() { localStorage.setItem(STORAGE_KEYS.categories, JSON.stringify(categories.value)); }
+        function saveSubcats() { localStorage.setItem(STORAGE_KEYS.subcats, JSON.stringify(subcategories.value)); }
+        function saveNotes() { localStorage.setItem(STORAGE_KEYS.notes, JSON.stringify(Object.assign({}, dailyNotes))); }
+        function saveRecurringState() { localStorage.setItem(STORAGE_KEYS.recurringState, JSON.stringify(Object.assign({}, recurringState))); }
+        function saveDismissed() { localStorage.setItem(STORAGE_KEYS.dismissed, JSON.stringify(Object.assign({}, dismissedRecurring))); }
+
+        function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+        function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+        function formatDate(dateStr) {
+          if (!dateStr) return '';
+          var d = new Date(dateStr + 'T00:00:00');
+          return (d.getMonth()+1) + '/' + d.getDate();
+        }
+
+        function formatDateHeader(dateStr) {
+          var d = new Date(dateStr + 'T00:00:00');
+          var today = new Date(todayStr() + 'T00:00:00');
+          var diff = Math.round((d - today) / 86400000);
+          if (diff === 0) return '今天';
+          if (diff === 1) return '明天';
+          if (diff === -1) return '昨天';
+          var weekdays = ['周日','周一','周二','周三','周四','周五','周六'];
+          return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + weekdays[d.getDay()];
+        }
+
+        function formatDateSub(dateStr) {
+          var d = new Date(dateStr + 'T00:00:00');
+          return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日';
+        }
+
+        function navigateDate(delta) {
+          var d = new Date(selectedDate.value + 'T00:00:00');
+          d.setDate(d.getDate() + delta);
+          selectedDate.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        }
+
+        function getCategoryColor(id) {
+          var cat = categories.value.find(function(c) { return c.id === id; });
+          return cat ? cat.color : '#94A3B8';
+        }
+        function getCategoryName(id) {
+          var cat = categories.value.find(function(c) { return c.id === id; });
+          return cat ? cat.name : '';
+        }
+        function getCategoryIcon(id) {
+          var cat = categories.value.find(function(c) { return c.id === id; });
+          return cat ? cat.icon : '\uD83D\uDCCC';
+        }
+        function getPeriodColor(id) {
+          var p = periods.find(function(x) { return x.id === id; });
+          return p ? p.color : '#94A3B8';
+        }
+        function getPeriodName(id) {
+          var p = periods.find(function(x) { return x.id === id; });
+          return p ? p.label : '';
+        }
+        function getSubcategories(catId) {
+          return subcategories.value[catId] || [];
+        }
+        function isOverdue(task) {
+          if (!task.deadline || task.status === 'completed') return false;
+          return new Date(task.deadline + 'T23:59:59') < new Date();
+        }
+        function getTaskProgress(task) {
+          if (!task.deadline || !task.createdAt) return 0;
+          var start = new Date(task.createdAt).getTime();
+          var end = new Date(task.deadline + 'T23:59:59').getTime();
+          var now = Date.now();
+          if (now >= end) return 100;
+          if (now <= start) return 0;
+          return Math.round((now - start) / (end - start) * 100);
+        }
+        function getTaskPeriod(taskId) {
+          var task = tasks.value.find(function(t) { return t.id === taskId; });
+          return task ? task.period : null;
+        }
+        function getTaskTodayCount(taskId) {
+          return todayActions.value.filter(function(a) { return a.taskId === taskId; }).length;
+        }
+        function getTaskRecurrenceText(taskId) {
+          var task = tasks.value.find(function(t) { return t.id === taskId; });
+          return task ? getRecurrenceText(task) : '';
+        }
+        function getRecurrenceText(task) {
+          if (!task.recurrence || task.recurrence === 'none') return '';
+          if (task.recurrence === 'daily') return '每天';
+          if (task.recurrence === 'weekly') {
+            var dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+            var days = (task.recurrenceDays || []).map(function(d) { return dayNames[d]; }).join('');
+            return days ? '每周' + days : '每周';
+          }
+          if (task.recurrence === 'monthly') return '每月';
+          return '';
+        }
+        function taskMatchesDate(task, dateStr) {
+          var d = new Date(dateStr + 'T00:00:00');
+          if (task.recurrence === 'daily') return true;
+          if (task.recurrence === 'weekly') return (task.recurrenceDays || []).indexOf(d.getDay()) >= 0;
+          if (task.recurrence === 'monthly') {
+            var created = new Date(task.createdAt);
+            return d.getDate() === created.getDate();
+          }
+          return false;
+        }
+
+        var mainCategories = computed(function() { return categories.value; });
+
+        var filteredTasks = computed(function() {
+          var list = tasks.value.slice();
+          if (filterCategory.value) list = list.filter(function(t) { return t.category === filterCategory.value; });
+          if (poolFilter.value === 'active') list = list.filter(function(t) { return t.status === 'active'; });
+          else if (poolFilter.value === 'paused') list = list.filter(function(t) { return t.status === 'paused'; });
+          else if (poolFilter.value === 'completed') list = list.filter(function(t) { return t.status === 'completed'; });
+          else if (['short','mid','long'].indexOf(poolFilter.value) >= 0) list = list.filter(function(t) { return t.period === poolFilter.value; });
+          return list.sort(function(a, b) {
+            if (a.status === 'active' && b.status !== 'active') return -1;
+            if (a.status !== 'active' && b.status === 'active') return 1;
+            return new Date(b.createdAt) - new Date(a.createdAt);
+          });
+        });
+
+        var todayActions = computed(function() {
+          var dateStr = selectedDate.value;
+          var manualRecords = dailyRecords.value.filter(function(r) { return r.date === dateStr; });
+          var manualTaskIds = {};
+          manualRecords.forEach(function(r) { manualTaskIds[r.taskId] = true; });
+
+          var autoRecords = [];
+          tasks.value.forEach(function(t) {
+            if (t.status !== 'active' || !t.recurrence || t.recurrence === 'none') return;
+            if (manualTaskIds[t.id]) return;
+            var key = t.id + '_' + dateStr;
+            if (dismissedRecurring[key]) return;
+            if (!taskMatchesDate(t, dateStr)) return;
+            var state = recurringState[key] || {};
+            autoRecords.push({
+              id: 'auto_' + key,
+              date: dateStr,
+              taskId: t.id,
+              title: t.title,
+              category: t.category,
+              subcategory: t.subcategory || '',
+              done: state.done || false,
+              startTime: state.startTime || '',
+              endTime: state.endTime || '',
+              isAuto: true
+            });
+          });
+
+          var all = manualRecords.concat(autoRecords);
+          all.sort(function(a, b) {
+            if (a.startTime && !b.startTime) return -1;
+            if (!a.startTime && b.startTime) return 1;
+            if (a.startTime && b.startTime) return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0;
+            return 0;
+          });
+          return all;
+        });
+
+        var todayDoneCount = computed(function() { return todayActions.value.filter(function(a) { return a.done; }).length; });
+        var todayProgress = computed(function() {
+          if (todayActions.value.length === 0) return 0;
+          return Math.round(todayDoneCount.value / todayActions.value.length * 100);
+        });
+        var isToday = computed(function() { return selectedDate.value === todayStr(); });
+        var selectedDateLabel = computed(function() { return formatDateHeader(selectedDate.value); });
+
+        var availableTasks = computed(function() {
+          var todayTaskIds = {};
+          todayActions.value.forEach(function(a) { todayTaskIds[a.taskId] = true; });
+          return tasks.value.filter(function(t) { return t.status === 'active' && !todayTaskIds[t.id]; }).slice(0, 10);
+        });
+
+        var streakDays = computed(function() {
+          var count = 0;
+          var d = new Date(todayStr() + 'T00:00:00');
+          while (true) {
+            var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            var records = dailyRecords.value.filter(function(r) { return r.date === ds; });
+            var hasAuto = tasks.value.some(function(t) {
+              if (t.status !== 'active' || !t.recurrence || t.recurrence === 'none') return false;
+              var key = t.id + '_' + ds;
+              if (dismissedRecurring[key]) return false;
+              if (!taskMatchesDate(t, ds)) return false;
+              var state = recurringState[key];
+              return state && state.done;
+            });
+            if (records.length > 0 || hasAuto) { count++; d.setDate(d.getDate() - 1); }
+            else break;
+          }
+          return count;
+        });
+
+        var totalActionsCount = computed(function() { return dailyRecords.value.length; });
+        var totalDoneCount = computed(function() { return dailyRecords.value.filter(function(r) { return r.done; }).length; });
+        var activeTasksCount = computed(function() { return tasks.value.filter(function(t) { return t.status === 'active'; }).length; });
+
+        function getCategoryTimeMinutes(catId) {
+          var actions = todayActions.value.filter(function(a) { return a.category === catId && a.startTime; });
+          var total = 0;
+          actions.forEach(function(a) {
+            var sp = a.startTime.split(':');
+            var startMin = parseInt(sp[0]) * 60 + parseInt(sp[1]);
+            var endMin = startMin + 60;
+            if (a.endTime) {
+              var ep = a.endTime.split(':');
+              endMin = parseInt(ep[0]) * 60 + parseInt(ep[1]);
+              if (endMin <= startMin) endMin = startMin + 60;
+            }
+            total += endMin - startMin;
+          });
+          return total;
+        }
+
+        function formatDuration(mins) {
+          if (mins <= 0) return '0分钟';
+          var h = Math.floor(mins / 60);
+          var m = mins % 60;
+          if (h > 0 && m > 0) return h + 'h' + m + 'm';
+          if (h > 0) return h + 'h';
+          return m + 'm';
+        }
+
+        function getCategoryTimeText(catId) {
+          var mins = getCategoryTimeMinutes(catId);
+          if (mins === 0) return '';
+          var h = Math.floor(mins / 60);
+          var m = mins % 60;
+          if (h > 0 && m > 0) return h + '小时' + m + '分钟';
+          if (h > 0) return h + '小时';
+          return m + '分钟';
+        }
+
+        function getCategoryTimePercent(catId) {
+          if (totalAllCategoryMinutes.value === 0) return 0;
+          return Math.round(getCategoryTimeMinutes(catId) / totalAllCategoryMinutes.value * 100);
+        }
+
+        var totalAllCategoryMinutes = computed(function() {
+          var total = 0;
+          categories.value.forEach(function(cat) { total += getCategoryTimeMinutes(cat.id); });
+          return total;
+        });
+
+        var timelineData = computed(function() {
+          var actions = todayActions.value.filter(function(a) { return a.startTime; });
+          actions.sort(function(a, b) { return a.startTime < b.startTime ? -1 : 1; });
+          var hourHeight = 56;
+          if (actions.length === 0) return { actions: [], startHour: 8, endHour: 22, hours: [], totalHeight: 0 };
+          var minHour = 24, maxHour = 0;
+          actions.forEach(function(a) {
+            var sp = a.startTime.split(':');
+            var sh = parseInt(sp[0]);
+            if (sh < minHour) minHour = sh;
+            var eh = sh + 1;
+            if (a.endTime) {
+              var ep = a.endTime.split(':');
+              eh = parseInt(ep[0]);
+              var em = parseInt(ep[1]);
+              if (em > 0) eh++;
+              if (eh <= sh) eh = sh + 1;
+            }
+            if (eh > maxHour) maxHour = eh;
+          });
+          minHour = Math.max(minHour, 0);
+          maxHour = Math.min(maxHour + 1, 24);
+          if (maxHour - minHour < 2) maxHour = minHour + 2;
+          var totalHeight = (maxHour - minHour) * hourHeight;
+          var positioned = actions.map(function(a) {
+            var sp = a.startTime.split(':');
+            var startMin = parseInt(sp[0]) * 60 + parseInt(sp[1]);
+            var endMin = startMin + 60;
+            if (a.endTime) {
+              var ep = a.endTime.split(':');
+              endMin = parseInt(ep[0]) * 60 + parseInt(ep[1]);
+              if (endMin <= startMin) endMin = startMin + 60;
+            }
+            var top = (startMin - minHour * 60) / 60 * hourHeight;
+            var height = (endMin - startMin) / 60 * hourHeight;
+            return { action: a, top: top, height: Math.max(height, 28), durationMin: endMin - startMin };
+          });
+          var hours = [];
+          for (var h = minHour; h <= maxHour; h++) {
+            hours.push({ hour: h, label: (h < 10 ? '0' : '') + h + ':00', top: (h - minHour) * hourHeight });
+          }
+          return { actions: positioned, startHour: minHour, endHour: maxHour, hours: hours, totalHeight: totalHeight };
+        });
+
+        var untimedActions = computed(function() {
+          return todayActions.value.filter(function(a) { return !a.startTime; });
+        });
+
+        var timedActionCount = computed(function() {
+          return todayActions.value.filter(function(a) { return a.startTime; }).length;
+        });
+
+        var totalTimedText = computed(function() {
+          var total = totalAllCategoryMinutes.value;
+          if (total === 0) return '0分钟';
+          var h = Math.floor(total / 60);
+          var m = total % 60;
+          if (h > 0 && m > 0) return h + '小时' + m + '分钟';
+          if (h > 0) return h + '小时';
+          return m + '分钟';
+        });
+
+        var calendarTitle = computed(function() { return calendarYear.value + '年' + (calendarMonth.value + 1) + '月'; });
+
+        var calendarDays = computed(function() {
+          var year = calendarYear.value;
+          var month = calendarMonth.value;
+          var firstDay = new Date(year, month, 1).getDay();
+          var daysInMonth = new Date(year, month + 1, 0).getDate();
+          var daysInPrevMonth = new Date(year, month, 0).getDate();
+          var today = todayStr();
+          var days = [];
+
+          function fmtDate(y, m, d) { return y + '-' + String(m+1).padStart(2,'0') + '-' + String(d).padStart(2,'0'); }
+
+          for (var i = firstDay - 1; i >= 0; i--) {
+            var dayNum = daysInPrevMonth - i;
+            var pm = month - 1; var py = year;
+            if (pm < 0) { pm = 11; py--; }
+            var dateStr = fmtDate(py, pm, dayNum);
+            var records = dailyRecords.value.filter(function(r) { return r.date === dateStr; });
+            days.push({ dayNum: dayNum, date: dateStr, currentMonth: false, isToday: dateStr === today, hasRecords: records.length > 0, categoryColors: Array.from(new Set(records.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+          }
+          for (var j = 1; j <= daysInMonth; j++) {
+            var dateStr2 = fmtDate(year, month, j);
+            var records2 = dailyRecords.value.filter(function(r) { return r.date === dateStr2; });
+            days.push({ dayNum: j, date: dateStr2, currentMonth: true, isToday: dateStr2 === today, hasRecords: records2.length > 0, categoryColors: Array.from(new Set(records2.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+          }
+          var remaining = 42 - days.length;
+          for (var k = 1; k <= Math.max(remaining, 0); k++) {
+            var nm = month + 1; var ny = year;
+            if (nm > 11) { nm = 0; ny++; }
+            var dateStr3 = fmtDate(ny, nm, k);
+            var records3 = dailyRecords.value.filter(function(r) { return r.date === dateStr3; });
+            days.push({ dayNum: k, date: dateStr3, currentMonth: false, isToday: dateStr3 === today, hasRecords: records3.length > 0, categoryColors: Array.from(new Set(records3.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+          }
+          return days;
+        });
+
+        function getCategoryCount(catId) {
+          return todayActions.value.filter(function(a) { return a.category === catId; }).length;
+        }
+        function getCategoryActionCount(catId) {
+          return dailyRecords.value.filter(function(r) { return r.category === catId; }).length;
+        }
+        function getCategoryPercent(catId) {
+          if (dailyRecords.value.length === 0) return 0;
+          return Math.round(getCategoryActionCount(catId) / dailyRecords.value.length * 100);
+        }
+
+        function openAddTaskModal(forToday, category) {
+          editingTask.value = null;
+          addToTodayFlag.value = forToday || false;
+          taskForm.title = ''; taskForm.description = ''; taskForm.category = category || 'study';
+          taskForm.subcategory = ''; taskForm.period = 'short'; taskForm.deadline = '';
+          taskForm.tags = []; taskForm.status = 'active'; taskForm.addToToday = forToday || false;
+          taskForm.recurrence = 'none'; taskForm.recurrenceDays = [];
+          taskForm.targetDate = forToday ? selectedDate.value : '';
+          taskForm.startTime = ''; taskForm.endTime = '';
+          showTaskModal.value = true;
+        }
+
+        function openEditTaskModal(task) {
+          editingTask.value = task;
+          addToTodayFlag.value = false;
+          taskForm.title = task.title; taskForm.description = task.description || '';
+          taskForm.category = task.category; taskForm.subcategory = task.subcategory || '';
+          taskForm.period = task.period; taskForm.deadline = task.deadline || '';
+          taskForm.tags = (task.tags || []).slice(); taskForm.status = task.status;
+          taskForm.addToToday = false;
+          taskForm.recurrence = task.recurrence || 'none';
+          taskForm.recurrenceDays = (task.recurrenceDays || []).slice();
+          taskForm.targetDate = '';
+          taskForm.startTime = ''; taskForm.endTime = '';
+          showTaskModal.value = true;
+        }
+
+        function closeTaskModal() { showTaskModal.value = false; editingTask.value = null; }
+
+        function saveTask() {
+          if (!taskForm.title.trim()) return;
+          if (editingTask.value) {
+            var idx = tasks.value.findIndex(function(t) { return t.id === editingTask.value.id; });
+            if (idx >= 0) {
+              tasks.value[idx] = Object.assign({}, tasks.value[idx], {
+                title: taskForm.title.trim(), description: taskForm.description.trim(),
+                category: taskForm.category, subcategory: taskForm.subcategory || '',
+                period: taskForm.period, deadline: taskForm.deadline || '',
+                tags: taskForm.tags.slice(), status: taskForm.status,
+                recurrence: taskForm.recurrence, recurrenceDays: taskForm.recurrenceDays.slice()
+              });
+            }
+          } else {
+            var newTask = {
+              id: uid(), title: taskForm.title.trim(), description: taskForm.description.trim(),
+              category: taskForm.category, subcategory: taskForm.subcategory || '',
+              period: taskForm.period, deadline: taskForm.deadline || '',
+              tags: taskForm.tags.slice(), status: 'active', createdAt: new Date().toISOString(),
+              recurrence: taskForm.recurrence, recurrenceDays: taskForm.recurrenceDays.slice(),
+            };
+            tasks.value.push(newTask);
+            if (taskForm.targetDate) addToToday(newTask.id, taskForm.targetDate, taskForm.startTime, taskForm.endTime);
+            else if (taskForm.addToToday) addToToday(newTask.id, selectedDate.value, taskForm.startTime, taskForm.endTime);
+          }
+          saveTasks();
+          closeTaskModal();
+        }
+
+        function deleteTask() {
+          if (!editingTask.value) return;
+          if (!confirm('确定删除这个任务吗？')) return;
+          tasks.value = tasks.value.filter(function(t) { return t.id !== editingTask.value.id; });
+          dailyRecords.value = dailyRecords.value.filter(function(r) { return r.taskId !== editingTask.value.id; });
+          saveTasks(); saveRecords();
+          closeTaskModal();
+        }
+
+        function addToToday(taskId, date, startTime, endTime) {
+          var task = tasks.value.find(function(t) { return t.id === taskId; });
+          if (!task) return;
+          var targetDate = date || selectedDate.value;
+          var exists = dailyRecords.value.find(function(r) { return r.taskId === taskId && r.date === targetDate; });
+          if (exists) return;
+          dailyRecords.value.push({ id: uid(), date: targetDate, taskId: taskId, title: task.title, category: task.category, subcategory: task.subcategory || '', done: false, startTime: startTime || '', endTime: endTime || '' });
+          saveRecords();
+        }
+
+        function toggleTodayAction(action) {
+          if (action.isAuto) {
+            var key = action.taskId + '_' + action.date;
+            if (!recurringState[key]) recurringState[key] = {};
+            recurringState[key].done = !recurringState[key].done;
+            saveRecurringState();
+          } else {
+            var rec = dailyRecords.value.find(function(r) { return r.id === action.id; });
+            if (rec) { rec.done = !rec.done; saveRecords(); }
+          }
+        }
+
+        function removeTodayAction(recordId) {
+          if (typeof recordId === 'string' && recordId.indexOf('auto_') === 0) {
+            var key = recordId.replace('auto_', '');
+            dismissedRecurring[key] = true;
+            saveDismissed();
+          } else {
+            dailyRecords.value = dailyRecords.value.filter(function(r) { return r.id !== recordId; });
+            saveRecords();
+          }
+        }
+
+        function toggleTimeEdit(actionId) {
+          editingTimeId.value = editingTimeId.value === actionId ? '' : actionId;
+        }
+
+        function setActionTime(action, field, value) {
+          if (action.isAuto) {
+            var key = action.taskId + '_' + action.date;
+            if (!recurringState[key]) recurringState[key] = {};
+            recurringState[key][field] = value;
+            saveRecurringState();
+          } else {
+            var rec = dailyRecords.value.find(function(r) { return r.id === action.id; });
+            if (rec) { rec[field] = value; saveRecords(); }
+          }
+        }
+
+        function getDayRecords(dateStr) {
+          return dailyRecords.value.filter(function(r) { return r.date === dateStr; });
+        }
+
+        function getDayRecordsSorted(dateStr) {
+          var recs = getDayRecords(dateStr).slice();
+          recs.sort(function(a, b) {
+            if (a.startTime && !b.startTime) return -1;
+            if (!a.startTime && b.startTime) return 1;
+            if (a.startTime && b.startTime) return a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0;
+            return 0;
+          });
+          return recs;
+        }
+
+        function addTag() {
+          var tag = tagInput.value.trim();
+          if (tag && taskForm.tags.indexOf(tag) === -1) taskForm.tags.push(tag);
+          tagInput.value = '';
+        }
+
+        function toggleRecurrenceDay(idx) {
+          var pos = taskForm.recurrenceDays.indexOf(idx);
+          if (pos >= 0) taskForm.recurrenceDays.splice(pos, 1);
+          else taskForm.recurrenceDays.push(idx);
+        }
+
+        function addCategory() {
+          var id = 'cat_' + uid();
+          categories.value.push({ id: id, name: '新分类', icon: '\uD83D\uDCCC', color: '#6366F1', light: '#EEF2FF', builtin: false });
+          subcategories.value[id] = [];
+          saveCategories(); saveSubcats();
+        }
+
+        function removeCategory(id) {
+          if (!confirm('删除此分类？相关任务不会被删除。')) return;
+          categories.value = categories.value.filter(function(c) { return c.id !== id; });
+          saveCategories();
+        }
+
+        function addSubcategory(catId) {
+          var val = (newSubcategoryInput[catId] || '').trim();
+          if (!val) return;
+          if (!subcategories.value[catId]) subcategories.value[catId] = [];
+          if (subcategories.value[catId].indexOf(val) === -1) {
+            subcategories.value[catId].push(val);
+            saveSubcats();
+          }
+          newSubcategoryInput[catId] = '';
+        }
+
+        function removeSubcategory(catId, sub) {
+          subcategories.value[catId] = (subcategories.value[catId] || []).filter(function(s) { return s !== sub; });
+          saveSubcats();
+        }
+
+        function saveDailyNote() {
+          var val = dailyNoteInput.value.trim();
+          if (val) {
+            dailyNotes[selectedDate.value] = dailyNoteInput.value;
+          } else {
+            delete dailyNotes[selectedDate.value];
+          }
+          saveNotes();
+          noteSaved.value = true;
+          setTimeout(function() { noteSaved.value = false; }, 2000);
+        }
+
+        var noteTimer = null;
+        function debounceSaveNote() {
+          clearTimeout(noteTimer);
+          noteTimer = setTimeout(saveDailyNote, 500);
+        }
+
+        function exportData() {
+          var data = {
+            tasks: tasks.value, records: dailyRecords.value,
+            categories: categories.value, subcategories: subcategories.value,
+            dailyNotes: Object.assign({}, dailyNotes),
+            recurringState: Object.assign({}, recurringState),
+            dismissedRecurring: Object.assign({}, dismissedRecurring),
+            exportedAt: new Date().toISOString()
+          };
+          var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url; a.download = 'flowday-backup-' + todayStr() + '.json';
+          a.click(); URL.revokeObjectURL(url);
+        }
+
+        function importData(e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function(ev) {
+            try {
+              var data = JSON.parse(ev.target.result);
+              if (data.tasks) { tasks.value = data.tasks; saveTasks(); }
+              if (data.records) { dailyRecords.value = data.records; saveRecords(); }
+              if (data.categories) { categories.value = data.categories; saveCategories(); }
+              if (data.subcategories) { subcategories.value = data.subcategories; saveSubcats(); }
+              if (data.dailyNotes) { Object.assign(dailyNotes, data.dailyNotes); saveNotes(); }
+              if (data.recurringState) { Object.assign(recurringState, data.recurringState); saveRecurringState(); }
+              if (data.dismissedRecurring) { Object.assign(dismissedRecurring, data.dismissedRecurring); saveDismissed(); }
+              dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+              alert('导入成功！');
+            } catch (err) { alert('导入失败：文件格式错误'); }
+          };
+          reader.readAsText(file);
+          e.target.value = '';
+        }
+
+        function clearAllData() {
+          if (!confirm('确定清除所有数据？此操作不可恢复！')) return;
+          tasks.value = []; dailyRecords.value = [];
+          Object.keys(dailyNotes).forEach(function(k) { delete dailyNotes[k]; });
+          Object.keys(recurringState).forEach(function(k) { delete recurringState[k]; });
+          Object.keys(dismissedRecurring).forEach(function(k) { delete dismissedRecurring[k]; });
+          saveTasks(); saveRecords(); saveNotes(); saveRecurringState(); saveDismissed();
+          dailyNoteInput.value = '';
+        }
+
+        watch(selectedDate, function() {
+          editingTimeId.value = '';
+          dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+          noteSaved.value = false;
+        });
+
+        watch(calendarMonth, function(val) {
+          if (val < 0) { calendarMonth.value = 11; calendarYear.value--; }
+          if (val > 11) { calendarMonth.value = 0; calendarYear.value++; }
+        });
+
+        onMounted(function() {
+          load();
+          dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+        });
+
+        return {
+          currentView: currentView, selectedDate: selectedDate, views: views, mobileViews: mobileViews,
+          weekDays: weekDays, periods: periods, poolFilters: poolFilters, recurrenceOptions: recurrenceOptions,
+          tasks: tasks, dailyRecords: dailyRecords, categories: categories, subcategories: subcategories,
+          dailyNotes: dailyNotes, recurringState: recurringState, dismissedRecurring: dismissedRecurring,
+          showTaskModal: showTaskModal, editingTask: editingTask, addToTodayFlag: addToTodayFlag,
+          filterCategory: filterCategory, poolFilter: poolFilter, taskForm: taskForm,
+          tagInput: tagInput, calendarMonth: calendarMonth, calendarYear: calendarYear,
+          newSubcategoryInput: newSubcategoryInput, editingTimeId: editingTimeId,
+          dailyNoteInput: dailyNoteInput, noteSaved: noteSaved,
+          mainCategories: mainCategories, filteredTasks: filteredTasks, todayActions: todayActions,
+          todayDoneCount: todayDoneCount, todayProgress: todayProgress, isToday: isToday, selectedDateLabel: selectedDateLabel, availableTasks: availableTasks,
+          streakDays: streakDays, totalActionsCount: totalActionsCount, totalDoneCount: totalDoneCount,
+          activeTasksCount: activeTasksCount,
+          timelineData: timelineData, untimedActions: untimedActions, timedActionCount: timedActionCount,
+          totalTimedText: totalTimedText, totalAllCategoryMinutes: totalAllCategoryMinutes,
+          calendarTitle: calendarTitle, calendarDays: calendarDays,
+          formatDate: formatDate, formatDateHeader: formatDateHeader, formatDateSub: formatDateSub,
+          navigateDate: navigateDate,
+          getCategoryColor: getCategoryColor, getCategoryName: getCategoryName, getCategoryIcon: getCategoryIcon,
+          getCategoryCount: getCategoryCount, getCategoryActionCount: getCategoryActionCount, getCategoryPercent: getCategoryPercent,
+          getCategoryTimeMinutes: getCategoryTimeMinutes, getCategoryTimeText: getCategoryTimeText, getCategoryTimePercent: getCategoryTimePercent,
+          formatDuration: formatDuration,
+          getPeriodColor: getPeriodColor, getPeriodName: getPeriodName, getSubcategories: getSubcategories,
+          isOverdue: isOverdue, getTaskProgress: getTaskProgress, getTaskPeriod: getTaskPeriod, getTaskTodayCount: getTaskTodayCount,
+          getTaskRecurrenceText: getTaskRecurrenceText, getRecurrenceText: getRecurrenceText,
+          openAddTaskModal: openAddTaskModal, openEditTaskModal: openEditTaskModal, closeTaskModal: closeTaskModal,
+          saveTask: saveTask, deleteTask: deleteTask,
+          addToToday: addToToday, toggleTodayAction: toggleTodayAction, removeTodayAction: removeTodayAction,
+          toggleTimeEdit: toggleTimeEdit, setActionTime: setActionTime,
+          getDayRecords: getDayRecords, getDayRecordsSorted: getDayRecordsSorted,
+          addTag: addTag, toggleRecurrenceDay: toggleRecurrenceDay,
+          addCategory: addCategory, removeCategory: removeCategory,
+          addSubcategory: addSubcategory, removeSubcategory: removeSubcategory,
+          saveCategories: saveCategories, saveDailyNote: saveDailyNote, debounceSaveNote: debounceSaveNote,
+          exportData: exportData, importData: importData, clearAllData: clearAllData,
+        };
+      }
+    });
+
+    app.mount('#app');
+  </script>
+</body>
+</html>
