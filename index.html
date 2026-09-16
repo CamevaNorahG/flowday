@@ -71,6 +71,18 @@
     .timeline-block:hover { filter: brightness(0.95); transform: scale(1.01); }
     .timeline-block-title { font-size: 0.75rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .timeline-block-time { font-size: 0.65rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+    .focus-timer-widget { position: fixed; bottom: 80px; right: 16px; z-index: 50; background: white; border-radius: 20px; box-shadow: 0 8px 30px -4px rgba(99,102,241,0.2), 0 2px 8px -2px rgba(0,0,0,0.08); padding: 16px 20px; min-width: 220px; }
+    @keyframes timerSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .focus-timer-widget.pomodoro-done { animation: pomodoroPulse 0.6s ease 3; }
+    @keyframes pomodoroPulse { 0%,100% { box-shadow: 0 8px 30px -4px rgba(99,102,241,0.2); } 50% { box-shadow: 0 8px 30px -4px rgba(16,185,129,0.4); } }
+    .focus-timer-time { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; color: #1E293B; line-height: 1; }
+    .focus-timer-task { font-size: 0.75rem; color: #64748B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; margin-top: 4px; }
+    .focus-timer-btn { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; transition: all 0.15s ease; }
+    .focus-timer-btn:active { transform: scale(0.92); }
+    .focus-timer-mode { font-size: 0.65rem; padding: 2px 8px; border-radius: 9999px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
+    .confetti-particle { position: fixed; width: 10px; height: 10px; pointer-events: none; z-index: 9999; animation: confettiFall 1.5s ease-out forwards; }
+    @keyframes confettiFall { 0% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); } 100% { opacity: 0; transform: translateY(100vh) rotate(720deg) scale(0.5); } }
+    .calendar-chain { position: absolute; bottom: 2px; right: 2px; font-size: 8px; opacity: 0.7; }
   </style>
 </head>
 <body>
@@ -207,6 +219,9 @@
                     </div>
                   </div>
                   <div class="flex items-center gap-0.5 flex-shrink-0">
+                    <button @click.stop="toggleFocusTimer(action.taskId)" class="text-slate-300 hover:text-indigo-400 transition p-1" :class="{ 'text-indigo-500': timerTaskId === action.taskId && timerRunning }" :title="timerTaskId === action.taskId ? '计时中...' : '开始专注'">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </button>
                     <button @click.stop="toggleTimeEdit(action.id)" class="text-slate-300 hover:text-indigo-400 transition p-1" :class="{ 'text-indigo-400': editingTimeId === action.id }">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </button>
@@ -245,6 +260,14 @@
                 <span class="text-base">&#9997;</span>
                 <h3 class="font-semibold text-slate-700">今日心得</h3>
                 <span v-if="noteSaved" class="ml-auto text-xs text-emerald-500 note-saved">&#10003; 已保存</span>
+              </div>
+              <div class="mb-3">
+                <div class="text-xs text-slate-500 mb-2">今天整体情绪</div>
+                <div class="flex gap-2">
+                  <button v-for="opt in moodOptions" :key="opt.value" @click="setDailyMood(selectedDate, opt.value)" class="flex flex-col items-center gap-1 p-2 rounded-lg transition" :class="getDailyMood(selectedDate) === opt.value ? 'bg-indigo-50 ring-2 ring-indigo-300' : 'hover:bg-slate-50'">
+                    <span class="text-2xl">{{ opt.emoji }}</span>
+                  </button>
+                </div>
               </div>
               <textarea
                 v-model="dailyNoteInput"
@@ -339,12 +362,14 @@
             </div>
             <div class="grid grid-cols-7 gap-1">
               <div v-for="(day, i) in calendarDays" :key="i"
-                :class="['aspect-square rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all text-sm relative', day.currentMonth ? (day.isToday ? 'bg-indigo-500 text-white font-bold' : day.hasRecords ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50') : 'text-slate-200']"
+                :class="['aspect-square rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all text-sm relative', day.currentMonth ? (day.isToday ? 'bg-indigo-500 text-white font-bold' : day.hasRecords ? 'font-medium' : 'text-slate-600 hover:bg-slate-50') : 'text-slate-200']"
+                :style="getCompletionStyle(day)"
                 @click="selectedDate = day.date; currentView = 'today'">
                 {{ day.dayNum }}
                 <div v-if="day.hasRecords && !day.isToday" class="flex gap-0.5 mt-0.5">
                   <div v-for="c in day.categoryColors" :key="c" class="w-1.5 h-1.5 rounded-full" :style="{ background: c }"></div>
                 </div>
+                <div v-if="day.streakLength >= 3 && !day.isToday" class="calendar-chain">🔥</div>
               </div>
             </div>
           </div>
@@ -485,7 +510,7 @@
             </div>
           </div>
 
-          <div class="bg-white rounded-2xl border border-slate-100 p-4">
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
             <h3 class="font-semibold text-slate-700 mb-4">最近14天</h3>
             <div class="flex gap-1 flex-wrap">
               <div v-for="day in last14Days" :key="day.date" class="w-8 h-8 rounded-lg flex items-center justify-center text-xs" :class="day.hasActions ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400'">
@@ -494,6 +519,40 @@
             </div>
             <div class="mt-3 text-sm text-slate-500">
               连续打卡 <span class="font-medium text-indigo-600">{{ streakDays }}</span> 天
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-slate-700">情绪趋势</h3>
+              <div v-if="averageMood !== null" class="flex items-center gap-1.5">
+                <span class="text-lg">{{ getMoodEmoji(Math.round(averageMood)) }}</span>
+                <span class="text-sm font-medium text-slate-600">{{ averageMood }}</span>
+              </div>
+            </div>
+            <div class="h-40">
+              <canvas id="moodTrendChart"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-4">
+            <h3 class="font-semibold text-slate-700 mb-4">情绪日历</h3>
+            <div class="flex gap-1.5 flex-wrap">
+              <div v-for="day in moodCalendarData" :key="day.date" class="w-9 h-9 rounded-lg flex flex-col items-center justify-center text-xs relative" :style="{ background: day.mood !== null ? getMoodColor(day.mood) : '#F1F5F9' }" :title="day.date + (day.mood !== null ? ' 情绪: ' + getMoodEmoji(Math.round(day.mood)) : ' 无记录')">
+                <span :class="day.mood !== null ? 'text-white font-medium' : 'text-slate-400'">{{ day.label }}</span>
+                <span v-if="day.mood !== null" class="text-[8px] leading-none">{{ getMoodEmoji(Math.round(day.mood)) }}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-3">
+              <span class="text-xs text-slate-400">低</span>
+              <div class="flex gap-0.5">
+                <div class="w-4 h-2 rounded-sm" style="background:#EF4444"></div>
+                <div class="w-4 h-2 rounded-sm" style="background:#F97316"></div>
+                <div class="w-4 h-2 rounded-sm" style="background:#FCD34D"></div>
+                <div class="w-4 h-2 rounded-sm" style="background:#6EE7B7"></div>
+                <div class="w-4 h-2 rounded-sm" style="background:#10B981"></div>
+              </div>
+              <span class="text-xs text-slate-400">高</span>
             </div>
           </div>
         </div>
@@ -694,6 +753,47 @@
                 {{ authMode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Focus Timer Widget -->
+      <div v-if="timerTaskId" class="focus-timer-widget" :class="{ 'pomodoro-done': timerPomodoroDone }">
+        <div class="flex items-center justify-between mb-2">
+          <span class="focus-timer-mode" :style="{ background: timerMode === 'pomodoro' ? '#EEF2FF' : '#F0FDF4', color: timerMode === 'pomodoro' ? '#6366F1' : '#16A34A' }" @click="toggleTimerMode">{{ timerMode === 'pomodoro' ? '🍅 番茄钟' : '⏱ 自由计时' }}</span>
+          <button @click="dismissTimer" class="text-slate-300 hover:text-slate-500 transition p-0.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="focus-timer-time">{{ timerDisplay }}</div>
+        <div class="focus-timer-task">{{ timerTaskTitle }}</div>
+        <div class="flex items-center gap-2 mt-3">
+          <button @click="toggleTimerPause" class="focus-timer-btn" :style="{ background: timerRunning ? '#FEF2F2' : '#EEF2FF', color: timerRunning ? '#EF4444' : '#6366F1' }">
+            <svg v-if="timerRunning" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            <svg v-else class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button @click="stopTimer" class="focus-timer-btn" style="background: #F1F5F9; color: #64748B;">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mood Popup -->
+      <div v-if="showMoodPopup" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black bg-opacity-30" @click="skipMood"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
+          <div class="text-center mb-4">
+            <div class="text-3xl mb-2">✓</div>
+            <h3 class="font-bold text-slate-800 text-lg">完成！现在感觉如何？</h3>
+          </div>
+          <div class="flex justify-center gap-3 mb-4">
+            <button v-for="opt in moodOptions" :key="opt.value" @click="saveMood(opt.value)" class="flex flex-col items-center gap-1 p-3 rounded-xl hover:bg-slate-50 transition">
+              <span class="text-3xl">{{ opt.emoji }}</span>
+              <span class="text-xs text-slate-600">{{ opt.label }}</span>
+            </button>
+          </div>
+          <div class="text-center">
+            <button @click="skipMood" class="text-sm text-slate-400 hover:text-slate-600 transition">跳过</button>
           </div>
         </div>
       </div>
@@ -928,6 +1028,184 @@
               }
               if (granted) checkReminders();
             });
+          }
+        }
+
+        var timerTaskId = ref('');
+        var timerRunning = ref(false);
+        var timerSeconds = ref(0);
+        var timerMode = ref(localStorage.getItem('flowday_timer_mode') || 'free');
+        var timerInterval = null;
+        var timerPomodoroDone = ref(false);
+        var POMODORO_SECONDS = 25 * 60;
+
+        var timerDisplay = computed(function() {
+          if (timerMode.value === 'pomodoro') {
+            var remaining = Math.max(0, POMODORO_SECONDS - timerSeconds.value);
+            var m = Math.floor(remaining / 60);
+            var s = remaining % 60;
+            return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+          }
+          var m = Math.floor(timerSeconds.value / 60);
+          var s = timerSeconds.value % 60;
+          return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        });
+
+        var timerTaskTitle = computed(function() {
+          var task = tasks.value.find(function(t) { return t.id === timerTaskId.value; });
+          return task ? task.title : '';
+        });
+
+        function startTimerInterval() {
+          if (timerInterval) return;
+          timerInterval = setInterval(function() {
+            timerSeconds.value++;
+            if (timerMode.value === 'pomodoro' && timerSeconds.value >= POMODORO_SECONDS) {
+              stopTimer();
+              timerPomodoroDone.value = true;
+              showNotification('🍅 番茄钟结束', '休息一下吧！');
+              setTimeout(function() { timerPomodoroDone.value = false; }, 3000);
+            }
+          }, 1000);
+        }
+
+        function stopTimerInterval() {
+          if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function toggleFocusTimer(taskId) {
+          if (timerTaskId.value === taskId && timerRunning.value) {
+            timerRunning.value = false;
+            stopTimerInterval();
+          } else if (timerTaskId.value === taskId && !timerRunning.value) {
+            timerRunning.value = true;
+            startTimerInterval();
+          } else {
+            stopTimerInterval();
+            timerTaskId.value = taskId;
+            timerSeconds.value = 0;
+            timerRunning.value = true;
+            timerPomodoroDone.value = false;
+            startTimerInterval();
+          }
+        }
+
+        function toggleTimerPause() {
+          if (timerRunning.value) {
+            timerRunning.value = false;
+            stopTimerInterval();
+          } else {
+            timerRunning.value = true;
+            startTimerInterval();
+          }
+        }
+
+        function stopTimer() {
+          stopTimerInterval();
+          var elapsedMinutes = Math.round(timerSeconds.value / 60);
+          if (elapsedMinutes >= 1 && timerTaskId.value) {
+            var task = tasks.value.find(function(t) { return t.id === timerTaskId.value; });
+            if (task) {
+              task.elapsedMinutes = (task.elapsedMinutes || 0) + elapsedMinutes;
+              saveTasks();
+            }
+          }
+          timerTaskId.value = '';
+          timerRunning.value = false;
+          timerSeconds.value = 0;
+          timerPomodoroDone.value = false;
+        }
+
+        function dismissTimer() {
+          stopTimerInterval();
+          timerTaskId.value = '';
+          timerRunning.value = false;
+          timerSeconds.value = 0;
+          timerPomodoroDone.value = false;
+        }
+
+        function toggleTimerMode() {
+          timerMode.value = timerMode.value === 'free' ? 'pomodoro' : 'free';
+          localStorage.setItem('flowday_timer_mode', timerMode.value);
+          if (timerTaskId.value) { timerSeconds.value = 0; }
+        }
+
+        var showMoodPopup = ref(false);
+        var pendingMoodRecord = ref(null);
+        var moodOptions = [
+          { value: 4, emoji: '😄', label: '很好' },
+          { value: 3, emoji: '😊', label: '不错' },
+          { value: 2, emoji: '😐', label: '一般' },
+          { value: 1, emoji: '😔', label: '低落' },
+          { value: 0, emoji: '😫', label: '很差' }
+        ];
+
+        function showMoodSelector(record) {
+          pendingMoodRecord.value = record;
+          showMoodPopup.value = true;
+        }
+
+        function saveMood(moodValue) {
+          if (pendingMoodRecord.value) {
+            var rec = dailyRecords.value.find(function(r) { return r.id === pendingMoodRecord.value.id; });
+            if (rec) {
+              rec.mood = moodValue;
+              saveRecords();
+            }
+          }
+          showMoodPopup.value = false;
+          pendingMoodRecord.value = null;
+        }
+
+        function skipMood() {
+          showMoodPopup.value = false;
+          pendingMoodRecord.value = null;
+        }
+
+        function getMoodEmoji(moodValue) {
+          if (moodValue === null || moodValue === undefined) return '';
+          var opt = moodOptions.find(function(m) { return m.value === moodValue; });
+          return opt ? opt.emoji : '';
+        }
+
+        function getDailyMood(dateStr) {
+          if (!dailyNotes[dateStr]) return null;
+          return dailyNotes[dateStr].mood || null;
+        }
+
+        function setDailyMood(dateStr, moodValue) {
+          if (!dailyNotes[dateStr]) {
+            dailyNotes[dateStr] = { text: '', date: dateStr };
+          }
+          dailyNotes[dateStr].mood = moodValue;
+          saveNotes();
+        }
+
+        function getMoodColor(moodValue) {
+          if (moodValue >= 3.5) return '#10B981';
+          if (moodValue >= 2.5) return '#6EE7B7';
+          if (moodValue >= 1.5) return '#FCD34D';
+          if (moodValue >= 0.5) return '#F97316';
+          return '#EF4444';
+        }
+
+        function celebrateCompletion() {
+          var colors = ['#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+          for (var i = 0; i < 30; i++) {
+            (function(index) {
+              setTimeout(function() {
+                var particle = document.createElement('div');
+                particle.className = 'confetti-particle';
+                particle.style.left = (Math.random() * 100) + '%';
+                particle.style.top = '-10px';
+                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+                particle.style.width = (Math.random() * 8 + 6) + 'px';
+                particle.style.height = (Math.random() * 8 + 6) + 'px';
+                document.body.appendChild(particle);
+                setTimeout(function() { particle.remove(); }, 1500);
+              }, index * 30);
+            })(i);
           }
         }
 
@@ -1175,8 +1453,46 @@
           return result;
         });
 
+        var moodTrendData = computed(function() {
+          var result = [];
+          var today = new Date(todayStr() + 'T00:00:00');
+          for (var i = 13; i >= 0; i--) {
+            var d = new Date(today);
+            d.setDate(today.getDate() - i);
+            var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            var dayMood = getDailyMood(ds);
+            var taskMoods = dailyRecords.value.filter(function(r) { return r.date === ds && r.mood !== undefined && r.mood !== null; }).map(function(r) { return r.mood; });
+            var avg = dayMood !== null ? dayMood : (taskMoods.length > 0 ? taskMoods.reduce(function(a,b){return a+b;},0) / taskMoods.length : null);
+            result.push({ date: ds, label: (d.getMonth()+1) + '/' + d.getDate(), mood: avg, dayOfWeek: d.getDay() });
+          }
+          return result;
+        });
+
+        var moodCalendarData = computed(function() {
+          var result = [];
+          var today = new Date(todayStr() + 'T00:00:00');
+          for (var i = 29; i >= 0; i--) {
+            var d = new Date(today);
+            d.setDate(today.getDate() - i);
+            var ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            var dayMood = getDailyMood(ds);
+            var taskMoods = dailyRecords.value.filter(function(r) { return r.date === ds && r.mood !== undefined && r.mood !== null; }).map(function(r) { return r.mood; });
+            var avg = dayMood !== null ? dayMood : (taskMoods.length > 0 ? taskMoods.reduce(function(a,b){return a+b;},0) / taskMoods.length : null);
+            result.push({ date: ds, label: d.getDate(), mood: avg });
+          }
+          return result;
+        });
+
+        var averageMood = computed(function() {
+          var moods = moodTrendData.value.filter(function(d) { return d.mood !== null; });
+          if (moods.length === 0) return null;
+          var sum = moods.reduce(function(a, b) { return a + b.mood; }, 0);
+          return Math.round(sum / moods.length * 10) / 10;
+        });
+
         var weeklyChart = null;
         var categoryChart = null;
+        var moodChart = null;
 
         function renderCharts() {
           setTimeout(function() {
@@ -1207,6 +1523,48 @@
                   datasets: [{ data: cc.map(function(c) { return c.count; }), backgroundColor: cc.map(function(c) { return c.color; }), borderWidth: 0 }]
                 },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '65%' }
+              });
+            }
+            var mCanvas = document.getElementById('moodTrendChart');
+            if (mCanvas && typeof Chart !== 'undefined') {
+              if (moodChart) moodChart.destroy();
+              var mt = moodTrendData.value;
+              var moodLabels = mt.map(function(d) { return d.label; });
+              var moodValues = mt.map(function(d) { return d.mood; });
+              var moodColors = moodValues.map(function(v) {
+                if (v === null) return 'transparent';
+                if (v >= 3.5) return '#10B981';
+                if (v >= 2.5) return '#6EE7B7';
+                if (v >= 1.5) return '#FCD34D';
+                if (v >= 0.5) return '#F97316';
+                return '#EF4444';
+              });
+              moodChart = new Chart(mCanvas, {
+                type: 'line',
+                data: {
+                  labels: moodLabels,
+                  datasets: [{
+                    data: moodValues,
+                    borderColor: '#818CF8',
+                    backgroundColor: 'rgba(129,140,248,0.1)',
+                    pointBackgroundColor: moodColors,
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    fill: true,
+                    tension: 0.3,
+                    spanGaps: true
+                  }]
+                },
+                options: {
+                  responsive: true, maintainAspectRatio: false,
+                  plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { var v = ctx.parsed.y; if (v === null) return '无记录'; var emojis = ['😫','😔','😐','😊','😄']; return emojis[Math.round(v)] + ' ' + v.toFixed(1); } } } },
+                  scales: {
+                    x: { grid: { display: false } },
+                    y: { min: 0, max: 4, ticks: { stepSize: 1, callback: function(v) { var emojis = ['😫','😔','😐','😊','😄']; return emojis[v]; } }, grid: { color: '#F1F5F9' } }
+                  }
+                }
               });
             }
           }, 100);
@@ -1340,12 +1698,16 @@
             if (pm < 0) { pm = 11; py--; }
             var dateStr = fmtDate(py, pm, dayNum);
             var records = dailyRecords.value.filter(function(r) { return r.date === dateStr; });
-            days.push({ dayNum: dayNum, date: dateStr, currentMonth: false, isToday: dateStr === today, hasRecords: records.length > 0, categoryColors: Array.from(new Set(records.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+            var doneCount = records.filter(function(r) { return r.done; }).length;
+            var completionRate = records.length > 0 ? doneCount / records.length : 0;
+            days.push({ dayNum: dayNum, date: dateStr, currentMonth: false, isToday: dateStr === today, hasRecords: records.length > 0, doneCount: doneCount, totalCount: records.length, completionRate: completionRate, categoryColors: Array.from(new Set(records.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
           }
           for (var j = 1; j <= daysInMonth; j++) {
             var dateStr2 = fmtDate(year, month, j);
             var records2 = dailyRecords.value.filter(function(r) { return r.date === dateStr2; });
-            days.push({ dayNum: j, date: dateStr2, currentMonth: true, isToday: dateStr2 === today, hasRecords: records2.length > 0, categoryColors: Array.from(new Set(records2.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+            var doneCount2 = records2.filter(function(r) { return r.done; }).length;
+            var completionRate2 = records2.length > 0 ? doneCount2 / records2.length : 0;
+            days.push({ dayNum: j, date: dateStr2, currentMonth: true, isToday: dateStr2 === today, hasRecords: records2.length > 0, doneCount: doneCount2, totalCount: records2.length, completionRate: completionRate2, categoryColors: Array.from(new Set(records2.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
           }
           var remaining = 42 - days.length;
           for (var k = 1; k <= Math.max(remaining, 0); k++) {
@@ -1353,10 +1715,28 @@
             if (nm > 11) { nm = 0; ny++; }
             var dateStr3 = fmtDate(ny, nm, k);
             var records3 = dailyRecords.value.filter(function(r) { return r.date === dateStr3; });
-            days.push({ dayNum: k, date: dateStr3, currentMonth: false, isToday: dateStr3 === today, hasRecords: records3.length > 0, categoryColors: Array.from(new Set(records3.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+            var doneCount3 = records3.filter(function(r) { return r.done; }).length;
+            var completionRate3 = records3.length > 0 ? doneCount3 / records3.length : 0;
+            days.push({ dayNum: k, date: dateStr3, currentMonth: false, isToday: dateStr3 === today, hasRecords: records3.length > 0, doneCount: doneCount3, totalCount: records3.length, completionRate: completionRate3, categoryColors: Array.from(new Set(records3.map(function(r) { return getCategoryColor(r.category); }))).slice(0, 3) });
+          }
+          var streak = 0;
+          for (var s = 0; s < days.length; s++) {
+            if (days[s].doneCount > 0) { streak++; } else { streak = 0; }
+            days[s].streakLength = streak;
           }
           return days;
         });
+
+        function getCompletionStyle(day) {
+          if (!day.currentMonth || !day.hasRecords || day.isToday) return {};
+          var rate = day.completionRate;
+          var bg, textColor;
+          if (rate >= 0.75) { bg = '#15803D'; textColor = '#FFFFFF'; }
+          else if (rate >= 0.5) { bg = '#22C55E'; textColor = '#FFFFFF'; }
+          else if (rate >= 0.25) { bg = '#86EFAC'; textColor = '#14532D'; }
+          else { bg = '#DCFCE7'; textColor = '#14532D'; }
+          return { background: bg, color: textColor };
+        }
 
         function getCategoryCount(catId) {
           return todayActions.value.filter(function(a) { return a.category === catId; }).length;
@@ -1462,9 +1842,19 @@
             if (!recurringState[key]) recurringState[key] = {};
             recurringState[key].done = !recurringState[key].done;
             saveRecurringState();
+            if (recurringState[key].done) celebrateCompletion();
           } else {
             var rec = dailyRecords.value.find(function(r) { return r.id === action.id; });
-            if (rec) { rec.done = !rec.done; saveRecords(); }
+            if (rec) {
+              rec.done = !rec.done;
+              saveRecords();
+              if (rec.done) {
+                celebrateCompletion();
+                if (!rec.mood) {
+                  showMoodSelector(rec);
+                }
+              }
+            }
           }
         }
 
@@ -1801,6 +2191,16 @@
           currentUser: currentUser, showAuthModal: showAuthModal, authMode: authMode,
           authEmail: authEmail, authPassword: authPassword, authError: authError, authLoading: authLoading,
           syncStatus: syncStatus, submitAuth: submitAuth, logout: logout, syncNow: syncNow,
+          timerTaskId: timerTaskId, timerRunning: timerRunning, timerSeconds: timerSeconds,
+          timerMode: timerMode, timerPomodoroDone: timerPomodoroDone,
+          timerDisplay: timerDisplay, timerTaskTitle: timerTaskTitle,
+          toggleFocusTimer: toggleFocusTimer, toggleTimerPause: toggleTimerPause,
+          stopTimer: stopTimer, dismissTimer: dismissTimer, toggleTimerMode: toggleTimerMode,
+          showMoodPopup: showMoodPopup, moodOptions: moodOptions,
+          showMoodSelector: showMoodSelector, saveMood: saveMood, skipMood: skipMood,
+          getMoodEmoji: getMoodEmoji, getDailyMood: getDailyMood, setDailyMood: setDailyMood,
+          getMoodColor: getMoodColor, moodTrendData: moodTrendData, moodCalendarData: moodCalendarData,
+          averageMood: averageMood, getCompletionStyle: getCompletionStyle,
         };
       }
     });
