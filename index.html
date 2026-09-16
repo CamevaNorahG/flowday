@@ -1169,15 +1169,16 @@
         }
 
         function getDailyMood(dateStr) {
-          if (!dailyNotes[dateStr]) return null;
-          return dailyNotes[dateStr].mood || null;
+          var note = dailyNotes[dateStr];
+          if (!note) return null;
+          if (typeof note === 'object') return note.mood || null;
+          return null;
         }
 
         function setDailyMood(dateStr, moodValue) {
-          if (!dailyNotes[dateStr]) {
-            dailyNotes[dateStr] = { text: '', date: dateStr };
-          }
-          dailyNotes[dateStr].mood = moodValue;
+          var existing = dailyNotes[dateStr];
+          var existingText = (existing && typeof existing === 'object') ? (existing.text || '') : (existing || '');
+          dailyNotes[dateStr] = { text: existingText, date: dateStr, mood: moodValue };
           saveNotes();
         }
 
@@ -1943,8 +1944,10 @@
 
         function saveDailyNote() {
           var val = dailyNoteInput.value.trim();
-          if (val) {
-            dailyNotes[selectedDate.value] = dailyNoteInput.value;
+          var existing = dailyNotes[selectedDate.value];
+          var existingMood = (existing && typeof existing === 'object') ? existing.mood : null;
+          if (val || existingMood) {
+            dailyNotes[selectedDate.value] = { text: val, date: selectedDate.value, mood: existingMood };
           } else {
             delete dailyNotes[selectedDate.value];
           }
@@ -2098,7 +2101,8 @@
                   Object.assign(dismissedRecurring, data.dismissedRecurring);
                 }
                 saveTasks(); saveRecords(); saveCategories(); saveSubcats(); saveNotes(); saveRecurringState(); saveDismissed();
-                dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+                var loadedNote = dailyNotes[selectedDate.value];
+                dailyNoteInput.value = (loadedNote && typeof loadedNote === 'object') ? (loadedNote.text || '') : (loadedNote || '');
               }
               syncStatus.value = '已同步';
               setTimeout(function() { if (syncStatus.value === '已同步') syncStatus.value = ''; }, 3000);
@@ -2122,7 +2126,8 @@
 
         watch(selectedDate, function() {
           editingTimeId.value = '';
-          dailyNoteInput.value = dailyNotes[selectedDate.value] || '';
+          var note = dailyNotes[selectedDate.value];
+          dailyNoteInput.value = (note && typeof note === 'object') ? (note.text || '') : (note || '');
           noteSaved.value = false;
         });
 
