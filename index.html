@@ -1118,6 +1118,38 @@
             if (task) {
               task.elapsedMinutes = (task.elapsedMinutes || 0) + elapsedMinutes;
               saveTasks();
+
+              var today = todayStr();
+              var existingRecord = dailyRecords.value.find(function(r) {
+                return r.taskId === timerTaskId.value && r.date === today;
+              });
+
+              if (!existingRecord) {
+                dailyRecords.value.push({
+                  id: uid(),
+                  date: today,
+                  taskId: task.id,
+                  title: task.title,
+                  category: task.category,
+                  subcategory: task.subcategory || '',
+                  done: true,
+                  startTime: '',
+                  endTime: ''
+                });
+                saveRecords();
+                celebrateCompletion();
+                var newRecord = dailyRecords.value[dailyRecords.value.length - 1];
+                if (!newRecord.mood) {
+                  showMoodSelector(newRecord);
+                }
+              } else if (!existingRecord.done) {
+                existingRecord.done = true;
+                saveRecords();
+                celebrateCompletion();
+                if (!existingRecord.mood) {
+                  showMoodSelector(existingRecord);
+                }
+              }
             }
           }
           timerTaskId.value = '';
