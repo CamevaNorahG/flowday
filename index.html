@@ -1121,13 +1121,20 @@
         var timerRunning = ref(false);
         var timerSeconds = ref(parseInt(localStorage.getItem('flowday_timer_seconds')) || 0);
         var timerMode = ref(localStorage.getItem('flowday_timer_mode') || 'free');
+        var timerStartTime = ref(localStorage.getItem('flowday_timer_startTime') || '');
         var timerInterval = null;
         var timerPomodoroDone = ref(false);
         var POMODORO_SECONDS = 25 * 60;
 
+        function currentTimeString() {
+          var d = new Date();
+          return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+
         function saveTimerState() {
           localStorage.setItem('flowday_timer_taskId', timerTaskId.value);
           localStorage.setItem('flowday_timer_seconds', timerSeconds.value.toString());
+          localStorage.setItem('flowday_timer_startTime', timerStartTime.value);
         }
 
         var timerDisplay = computed(function() {
@@ -1171,6 +1178,7 @@
             stopTimerInterval();
             saveTimerState();
           } else if (timerTaskId.value === taskId && !timerRunning.value) {
+            if (!timerStartTime.value) timerStartTime.value = currentTimeString();
             timerRunning.value = true;
             startTimerInterval();
             saveTimerState();
@@ -1178,6 +1186,7 @@
             stopTimerInterval();
             timerTaskId.value = taskId;
             timerSeconds.value = 0;
+            timerStartTime.value = currentTimeString();
             timerRunning.value = true;
             timerPomodoroDone.value = false;
             startTimerInterval();
@@ -1199,6 +1208,8 @@
         function stopTimer() {
           stopTimerInterval();
           var elapsedMinutes = Math.round(timerSeconds.value / 60);
+          var recordStartTime = timerStartTime.value || '';
+          var recordEndTime = currentTimeString();
           if (elapsedMinutes >= 1 && timerTaskId.value) {
             var task = tasks.value.find(function(t) { return t.id === timerTaskId.value; });
             if (task) {
@@ -1219,8 +1230,8 @@
                   category: task.category,
                   subcategory: task.subcategory || '',
                   done: true,
-                  startTime: '',
-                  endTime: ''
+                  startTime: recordStartTime,
+                  endTime: recordEndTime
                 });
                 saveRecords();
                 celebrateCompletion();
@@ -1230,6 +1241,8 @@
                 }
               } else if (!existingRecord.done) {
                 existingRecord.done = true;
+                if (!existingRecord.startTime) existingRecord.startTime = recordStartTime;
+                if (!existingRecord.endTime) existingRecord.endTime = recordEndTime;
                 saveRecords();
                 celebrateCompletion();
                 if (!existingRecord.mood) {
@@ -1241,6 +1254,7 @@
           timerTaskId.value = '';
           timerSeconds.value = 0;
           timerRunning.value = false;
+          timerStartTime.value = '';
           saveTimerState();
           timerPomodoroDone.value = false;
         }
@@ -1250,6 +1264,7 @@
           timerTaskId.value = '';
           timerRunning.value = false;
           timerSeconds.value = 0;
+          timerStartTime.value = '';
           timerPomodoroDone.value = false;
         }
 
