@@ -2135,6 +2135,10 @@
           if (currentUser.value) cloudSave();
         }
 
+        window.addEventListener('beforeunload', function() {
+          if (currentUser.value) cloudSave();
+        });
+
         watch(selectedDate, function() {
           editingTimeId.value = '';
           var note = dailyNotes[selectedDate.value];
