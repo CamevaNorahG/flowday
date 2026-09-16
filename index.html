@@ -1031,13 +1031,18 @@
           }
         }
 
-        var timerTaskId = ref('');
+        var timerTaskId = ref(localStorage.getItem('flowday_timer_taskId') || '');
         var timerRunning = ref(false);
-        var timerSeconds = ref(0);
+        var timerSeconds = ref(parseInt(localStorage.getItem('flowday_timer_seconds')) || 0);
         var timerMode = ref(localStorage.getItem('flowday_timer_mode') || 'free');
         var timerInterval = null;
         var timerPomodoroDone = ref(false);
         var POMODORO_SECONDS = 25 * 60;
+
+        function saveTimerState() {
+          localStorage.setItem('flowday_timer_taskId', timerTaskId.value);
+          localStorage.setItem('flowday_timer_seconds', timerSeconds.value.toString());
+        }
 
         var timerDisplay = computed(function() {
           if (timerMode.value === 'pomodoro') {
@@ -1060,6 +1065,7 @@
           if (timerInterval) return;
           timerInterval = setInterval(function() {
             timerSeconds.value++;
+            if (timerSeconds.value % 5 === 0) saveTimerState();
             if (timerMode.value === 'pomodoro' && timerSeconds.value >= POMODORO_SECONDS) {
               stopTimer();
               timerPomodoroDone.value = true;
@@ -1077,9 +1083,11 @@
           if (timerTaskId.value === taskId && timerRunning.value) {
             timerRunning.value = false;
             stopTimerInterval();
+            saveTimerState();
           } else if (timerTaskId.value === taskId && !timerRunning.value) {
             timerRunning.value = true;
             startTimerInterval();
+            saveTimerState();
           } else {
             stopTimerInterval();
             timerTaskId.value = taskId;
@@ -1087,6 +1095,7 @@
             timerRunning.value = true;
             timerPomodoroDone.value = false;
             startTimerInterval();
+            saveTimerState();
           }
         }
 
@@ -1098,6 +1107,7 @@
             timerRunning.value = true;
             startTimerInterval();
           }
+          saveTimerState();
         }
 
         function stopTimer() {
@@ -1111,8 +1121,9 @@
             }
           }
           timerTaskId.value = '';
-          timerRunning.value = false;
           timerSeconds.value = 0;
+          timerRunning.value = false;
+          saveTimerState();
           timerPomodoroDone.value = false;
         }
 
