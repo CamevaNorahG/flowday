@@ -179,15 +179,16 @@
               <button @click="openAddTaskModal(true)" class="px-4 py-2 bg-indigo-500 text-white rounded-xl text-sm font-medium hover:bg-indigo-600 transition">添加行动到{{ selectedDateLabel }}</button>
             </div>
             <div v-else class="space-y-2">
-              <div v-for="action in todayActions" :key="action.id" class="task-card bg-white rounded-xl p-4 border border-slate-100" :class="{ 'opacity-60': action.done }">
+              <div v-for="action in todayActions" :key="action.id" class="task-card bg-white rounded-xl p-4 border border-slate-100 card-hover cursor-pointer" :class="{ 'opacity-60': action.done }" @click="editActionTask(action)">
                 <div class="flex items-start gap-3">
-                  <div class="checkbox-custom mt-0.5" :class="{ checked: action.done }" :style="action.done ? { background: getCategoryColor(action.category) } : {}" @click="toggleTodayAction(action)"></div>
+                  <div class="checkbox-custom mt-0.5" :class="{ checked: action.done }" :style="action.done ? { background: getCategoryColor(action.category) } : {}" @click.stop="toggleTodayAction(action)"></div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
                       <span class="category-dot" :style="{ background: getCategoryColor(action.category) }"></span>
                       <span class="text-sm font-medium text-slate-700 truncate">{{ action.title }}</span>
                       <span v-if="action.startTime" class="time-badge ml-auto flex-shrink-0">{{ action.startTime }}<span v-if="action.endTime">-{{ action.endTime }}</span></span>
                     </div>
+                    <p v-if="getActionDescription(action.taskId)" class="text-xs text-slate-400 mb-1.5 line-clamp-2">{{ getActionDescription(action.taskId) }}</p>
                     <div class="flex items-center gap-2 flex-wrap">
                       <span class="text-xs text-slate-400">{{ getCategoryName(action.category) }}</span>
                       <template v-if="action.subcategory">
@@ -197,7 +198,7 @@
                       <span v-if="getTaskPeriod(action.taskId)" class="period-badge" :style="{ background: getPeriodColor(getTaskPeriod(action.taskId)) + '20', color: getPeriodColor(getTaskPeriod(action.taskId)) }">{{ getPeriodName(getTaskPeriod(action.taskId)) }}</span>
                       <span v-if="getTaskRecurrenceText(action.taskId)" class="text-xs text-indigo-400">{{ getTaskRecurrenceText(action.taskId) }}</span>
                     </div>
-                    <div v-if="editingTimeId === action.id" class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-50">
+                    <div v-if="editingTimeId === action.id" @click.stop class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-50">
                       <span class="text-xs text-slate-400">开始</span>
                       <input type="time" :value="action.startTime" @change="setActionTime(action, 'startTime', $event.target.value)" class="px-2 py-1 bg-slate-50 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-200" />
                       <span class="text-xs text-slate-400">结束</span>
@@ -206,10 +207,10 @@
                     </div>
                   </div>
                   <div class="flex items-center gap-0.5 flex-shrink-0">
-                    <button @click="toggleTimeEdit(action.id)" class="text-slate-300 hover:text-indigo-400 transition p-1" :class="{ 'text-indigo-400': editingTimeId === action.id }">
+                    <button @click.stop="toggleTimeEdit(action.id)" class="text-slate-300 hover:text-indigo-400 transition p-1" :class="{ 'text-indigo-400': editingTimeId === action.id }">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </button>
-                    <button @click="removeTodayAction(action.id)" class="text-slate-300 hover:text-red-400 transition p-1">
+                    <button @click.stop="removeTodayAction(action.id)" class="text-slate-300 hover:text-red-400 transition p-1">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                   </div>
@@ -1385,6 +1386,16 @@
 
         function closeTaskModal() { showTaskModal.value = false; editingTask.value = null; }
 
+        function editActionTask(action) {
+          var task = tasks.value.find(function(t) { return t.id === action.taskId; });
+          if (task) openEditTaskModal(task);
+        }
+
+        function getActionDescription(taskId) {
+          var task = tasks.value.find(function(t) { return t.id === taskId; });
+          return task ? (task.description || '') : '';
+        }
+
         function saveTask() {
           if (!taskForm.title.trim()) return;
           if (editingTask.value) {
@@ -1768,6 +1779,7 @@
           getTaskRecurrenceText: getTaskRecurrenceText, getRecurrenceText: getRecurrenceText,
           openAddTaskModal: openAddTaskModal, openEditTaskModal: openEditTaskModal, closeTaskModal: closeTaskModal,
           saveTask: saveTask, deleteTask: deleteTask,
+          editActionTask: editActionTask, getActionDescription: getActionDescription,
           addToToday: addToToday, toggleTodayAction: toggleTodayAction, removeTodayAction: removeTodayAction,
           toggleTimeEdit: toggleTimeEdit, setActionTime: setActionTime,
           getDayRecords: getDayRecords, getDayRecordsSorted: getDayRecordsSorted,
