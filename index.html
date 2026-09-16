@@ -35,19 +35,62 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --bg-primary: #F8FAFC;
+      --bg-secondary: #F0F4FF;
+      --bg-tertiary: #FDF2F8;
+      --bg-card: rgba(255,255,255,0.75);
+      --text-primary: #1E293B;
+      --text-secondary: #64748B;
+      --text-muted: #94A3B8;
+      --border-color: #E2E8F0;
+      --input-bg: #F8FAFC;
+      --accent-primary: #6366F1;
+      --accent-secondary: #A855F7;
+      --accent-tertiary: #EC4899;
+    }
+    [data-theme="dark"] {
+      --bg-primary: #0F172A;
+      --bg-secondary: #1E293B;
+      --bg-tertiary: #334155;
+      --bg-card: rgba(30,41,59,0.75);
+      --text-primary: #F1F5F9;
+      --text-secondary: #CBD5E1;
+      --text-muted: #64748B;
+      --border-color: #334155;
+      --input-bg: #1E293B;
+      --accent-primary: #818CF8;
+      --accent-secondary: #C084FC;
+      --accent-tertiary: #F472B6;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, sans-serif; }
-    body { background: linear-gradient(135deg, #F8FAFC 0%, #F0F4FF 40%, #FDF2F8 70%, #F8FAFC 100%); min-height: 100vh; overflow-x: hidden; position: relative; }
+    body { background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 40%, var(--bg-tertiary) 70%, var(--bg-primary) 100%); min-height: 100vh; overflow-x: hidden; position: relative; color: var(--text-primary); transition: background 0.3s ease, color 0.3s ease; }
     body::before { content: ''; position: fixed; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.04) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(168,85,247,0.04) 0%, transparent 50%), radial-gradient(ellipse at 60% 30%, rgba(236,72,153,0.03) 0%, transparent 40%); pointer-events: none; z-index: 0; }
     .card-hover { transition: all 0.2s ease; }
     .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px -5px rgba(99,102,241,0.12), 0 4px 10px -3px rgba(0,0,0,0.06); }
     .task-card { transition: all 0.25s ease; }
     .task-card:active { transform: scale(0.98); }
-    .glass { background: rgba(255,255,255,0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    .glass { background: var(--bg-card); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
     .category-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
     .period-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 9999px; font-weight: 600; letter-spacing: 0.02em; }
     .checkbox-custom { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid #CBD5E1; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .checkbox-custom.checked { border-color: transparent; }
+
+    [data-theme="dark"] .bg-white { background-color: #1E293B !important; }
+    [data-theme="dark"] .bg-slate-50 { background-color: #0F172A !important; }
+    [data-theme="dark"] .bg-slate-100 { background-color: #334155 !important; }
+    [data-theme="dark"] .text-slate-800 { color: #F1F5F9 !important; }
+    [data-theme="dark"] .text-slate-700 { color: #E2E8F0 !important; }
+    [data-theme="dark"] .text-slate-600 { color: #CBD5E1 !important; }
+    [data-theme="dark"] .text-slate-500 { color: #94A3B8 !important; }
+    [data-theme="dark"] .text-slate-400 { color: #64748B !important; }
+    [data-theme="dark"] .border-slate-100 { border-color: #334155 !important; }
+    [data-theme="dark"] .border-slate-200 { border-color: #475569 !important; }
+    [data-theme="dark"] .hover\:bg-slate-50:hover { background-color: #334155 !important; }
+    [data-theme="dark"] .hover\:bg-slate-100:hover { background-color: #475569 !important; }
+    [data-theme="dark"] input, [data-theme="dark"] textarea { background-color: var(--input-bg) !important; color: var(--text-primary) !important; }
+    [data-theme="dark"] .modal-overlay { background: rgba(0,0,0,0.6) !important; }
     .checkbox-custom.checked::after { content: '\2713'; color: white; font-size: 12px; font-weight: 700; }
     .modal-overlay { background: rgba(15,23,42,0.4); backdrop-filter: blur(4px); }
     input, textarea, select { font-family: inherit; }
@@ -560,6 +603,21 @@
         <!-- SETTINGS VIEW -->
         <div v-if="currentView === 'settings'">
           <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <h3 class="font-semibold text-slate-700 mb-4">外观设置</h3>
+            <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+              <div>
+                <div class="text-sm font-medium text-slate-700">深色模式</div>
+                <div class="text-xs text-slate-500">切换浅色/深色主题</div>
+              </div>
+              <button @click="toggleTheme" class="relative w-14 h-7 rounded-full transition-colors" :style="{ background: currentTheme === 'dark' ? '#6366F1' : '#CBD5E1' }">
+                <div class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-transform flex items-center justify-center text-sm" :style="{ transform: currentTheme === 'dark' ? 'translateX(28px)' : 'translateX(2px)' }">
+                  {{ currentTheme === 'dark' ? '🌙' : '☀️' }}
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
             <h3 class="font-semibold text-slate-700 mb-4">分类管理</h3>
             <div class="space-y-2 mb-4">
               <div v-for="cat in categories" :key="cat.id" class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
@@ -850,6 +908,14 @@
       template: '#tpl-app',
       setup: function() {
         var STORAGE_KEYS = { tasks: 'fd_tasks', records: 'fd_records', categories: 'fd_categories', subcats: 'fd_subcats', notes: 'fd_notes', recurringState: 'fd_recurring_state', dismissed: 'fd_dismissed_recurring' };
+
+        var currentTheme = ref(localStorage.getItem('flowday_theme') || 'light');
+        function toggleTheme() {
+          currentTheme.value = currentTheme.value === 'light' ? 'dark' : 'light';
+          localStorage.setItem('flowday_theme', currentTheme.value);
+          document.documentElement.setAttribute('data-theme', currentTheme.value);
+        }
+        document.documentElement.setAttribute('data-theme', currentTheme.value);
 
         var defaultCategories = [
           { id: 'class', name: '上课', icon: '\uD83D\uDCDA', color: '#8B5CF6', light: '#EDE9FE', builtin: true },
@@ -2237,6 +2303,7 @@
           weeklySummary: weeklySummary, categoryChartData: categoryChartData, last14Days: last14Days,
           notificationsEnabled: notificationsEnabled, notificationPermissionDenied: notificationPermissionDenied,
           toggleNotifications: toggleNotifications,
+          currentTheme: currentTheme, toggleTheme: toggleTheme,
           timelineData: timelineData, untimedActions: untimedActions, timedActionCount: timedActionCount,
           totalTimedText: totalTimedText, totalAllCategoryMinutes: totalAllCategoryMinutes,
           calendarTitle: calendarTitle, calendarDays: calendarDays,
