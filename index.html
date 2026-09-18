@@ -1987,7 +1987,28 @@
             if (!recurringState[key]) recurringState[key] = {};
             recurringState[key].done = !recurringState[key].done;
             saveRecurringState();
-            if (recurringState[key].done) celebrateCompletion();
+            if (recurringState[key].done) {
+              var task = tasks.value.find(function(t) { return t.id === action.taskId; });
+              if (task) {
+                var exists = dailyRecords.value.find(function(r) { return r.taskId === task.id && r.date === action.date; });
+                if (!exists) {
+                  dailyRecords.value.push({
+                    id: uid(), date: action.date, taskId: task.id, title: task.title,
+                    category: task.category, subcategory: task.subcategory || '',
+                    done: true, startTime: action.startTime || '', endTime: action.endTime || ''
+                  });
+                  saveRecords();
+                } else {
+                  exists.done = true;
+                  saveRecords();
+                }
+                var rec = dailyRecords.value.find(function(r) { return r.taskId === task.id && r.date === action.date; });
+                celebrateCompletion();
+                if (rec && !rec.mood) { showMoodSelector(rec); }
+              } else {
+                celebrateCompletion();
+              }
+            }
           } else {
             var rec = dailyRecords.value.find(function(r) { return r.id === action.id; });
             if (rec) {
